@@ -1,0 +1,40 @@
+---
+{
+  pipeline: [ 'abide.corr.pre-autoencoder-1.sigm', 'abide.corr.pre-autoencoder-2.sigm', 'abide.corr.mlp.sigm' ],
+  config: {
+    common: {
+      data_source: '%(data_path)s/corr.csv',
+      data_train_start: 0,
+      data_train_stop: 900,
+      data_valid_start: 900,
+      data_valid_stop: 1000,
+    },
+    abide.corr.pre-autoencoder-1.sigm: {
+      save_path: '%(result_path)s/abide.corr.pre-autoencoder-1.config-4.sigm.pkl',
+      layer_in: 18145,
+      layer_out: 1000,
+      tied_weights: True,
+      layer_enc: sigmoid,
+      layer_dec: null,
+      layer_batch: 100,
+      layer_max_epochs: 800,
+    },
+    abide.corr.pre-autoencoder-2.sigm: {
+      data_transform: '%(result_path)s/abide.corr.pre-autoencoder-1.config-4.sigm.pkl',
+      save_path: '%(result_path)s/abide.corr.pre-autoencoder-2.config-4.sigm.pkl',
+      layer_in: 1000,
+      layer_out: 1000,
+      tied_weights: True,
+      layer_enc: sigmoid,
+      layer_dec: null,
+      layer_batch: 100,
+      layer_max_epochs: 800,
+    },
+    abide.corr.mlp.sigm: {
+      mlp_max_epochs: 100,
+      layer_1: '%(result_path)s/abide.corr.pre-autoencoder-1.config-4.sigm.pkl',
+      layer_2: '%(result_path)s/abide.corr.pre-autoencoder-2.config-4.sigm.pkl',
+      save_path: '%(result_path)s/abide.corr.mlp.config-4.sigm.pkl',
+    },
+  }
+}

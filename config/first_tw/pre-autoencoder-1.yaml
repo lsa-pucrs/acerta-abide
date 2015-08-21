@@ -1,0 +1,37 @@
+!obj:pylearn2.train.Train {
+
+    dataset: &train !obj:pylearn2.datasets.csv_dataset.CSVDataset {
+        path: '%(data_source)s',
+        expect_headers: False,
+        expect_labels: True,
+        start: %(data_train_start)s,
+        stop: %(data_train_stop)s
+    },
+
+    model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
+        nvis : %(layer_in)s,
+        nhid : %(layer_out)s,
+        irange : 0.05,
+        tied_weights: True,
+        corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
+            corruption_level: .2,
+        },
+        act_enc: %(layer_enc)s,
+        act_dec: %(layer_dec)s,
+    },
+
+    algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
+        learning_rate : 1e-3,
+        batch_size : %(layer_batch)s,
+        monitoring_batches : 5,
+        monitoring_dataset : *train,
+        cost : !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
+        termination_criterion : !obj:pylearn2.termination_criteria.EpochCounter {
+            max_epochs: %(layer_max_epochs)s,
+        }
+    },
+
+    save_path: '%(save_path)s',
+    save_freq: 1
+
+}

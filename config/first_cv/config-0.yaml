@@ -1,0 +1,17 @@
+---
+{
+  pipeline: [
+    # 'abide.corr.pre-autoencoder-1',
+    # 'abide.corr.pre-autoencoder-2',
+    'abide.corr.mlp'
+  ],
+  config: {
+    common: {
+      data_source: '%(data_path)s/corr.csv',
+      save_pre_autoencoder_1: '%(result_path)s/abide.corr.config-0.pre-autoencoder-1.pkl',
+      save_pre_autoencoder_2: '%(result_path)s/abide.corr.config-0.pre-autoencoder-2.pkl',
+      save_mlp:               '%(result_path)s/abide.corr.config-0.mlp.pkl',
+      save_mlp_best:          '%(result_path)s/abide.corr.config-0.mlp.best.pkl',
+    }
+  }
+}

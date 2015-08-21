@@ -1,0 +1,37 @@
+!obj:pylearn2.cross_validation.TrainCV {
+
+    dataset_iterator: !obj:pylearn2.cross_validation.dataset_iterators.StratifiedDatasetKFold {
+        dataset: !obj:pylearn2.datasets.csv_dataset.CSVDataset {
+            path: '%(data_source)s',
+            expect_headers: False,
+            expect_labels: True,
+            start: 0,
+            stop: 900
+        },
+        n_folds: 10,
+    },
+
+    model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
+        nvis : 17955,
+        nhid : 1000,
+        irange : 0.05,
+        corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
+            corruption_level: .2,
+        },
+        act_enc: "tanh",
+        act_dec: null,
+    },
+
+    algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
+        learning_rate : 1e-3,
+        batch_size : 10,
+        cost : !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
+        termination_criterion : !obj:pylearn2.termination_criteria.EpochCounter {
+            max_epochs: 400,
+        }
+    },
+
+    save_path: '%(save_pre_autoencoder_1)s',
+    save_freq: 1
+
+}
