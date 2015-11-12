@@ -2,7 +2,7 @@
 
     dataset: &train !obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
         raw: !obj:pylearn2.datasets.csv_dataset.CSVDataset {
-            path: '{data_source}',
+            path: "{data_source}",
             expect_headers: False,
             expect_labels: True,
             start: {data_train_start},
@@ -25,7 +25,19 @@
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
         learning_rate : 1e-3,
         batch_size : {layer_batch},
-        monitoring_dataset : *train,
+        monitoring_dataset: {
+            "train": *train,
+            "valid": !obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
+                raw: !obj:pylearn2.datasets.csv_dataset.CSVDataset {
+                    path: "{data_source}",
+                    expect_headers: False,
+                    expect_labels: True,
+                    start: {data_valid_start},
+                    stop: {data_valid_stop},
+                },
+                transformer: !pkl: {data_transform_1}
+            },
+        },
         cost : !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
         termination_criterion : !obj:pylearn2.termination_criteria.EpochCounter {
             max_epochs: {layer_max_epochs},
@@ -33,13 +45,13 @@
     },
 
     extensions: [
-        !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
-             channel_name: 'objective',
-             save_path: "{save_path}",
+        !obj:best_params.MonitorBasedSaveBest {
+            channel_name: "valid_objective",
+            save_path: "{save_path}",
         },
         !obj:csv_monitoring.CSVMonitoring {
-            name: "Fold {fold}",
-            file: {log_file},
+            name: "{namespace}.{step}.cv_{fold}",
+            file: {log_file}
         },
     ],
 

@@ -1,37 +1,43 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:pylearn2.datasets.csv_dataset.CSVDataset {
-        path: '%(data_source)s',
+        path: '{data_source}',
         expect_headers: False,
         expect_labels: True,
-        start: %(data_train_start)s,
-        stop: %(data_train_stop)s
+        start: {data_train_start},
+        stop: {data_train_stop}
     },
 
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
-        nvis : %(layer_in)s,
-        nhid : %(layer_out)s,
+        nvis : {layer_in},
+        nhid : {layer_out},
         irange : 0.05,
-        tied_weights: True,
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
-            corruption_level: .2,
+            corruption_level: {corruption},
         },
-        act_enc: %(layer_enc)s,
-        act_dec: %(layer_dec)s,
+        act_enc: {layer_enc},
+        act_dec: {layer_dec},
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
         learning_rate : 1e-3,
-        batch_size : %(layer_batch)s,
-        monitoring_batches : 5,
+        batch_size : {layer_batch},
         monitoring_dataset : *train,
         cost : !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
         termination_criterion : !obj:pylearn2.termination_criteria.EpochCounter {
-            max_epochs: %(layer_max_epochs)s,
+            max_epochs: {layer_max_epochs},
         }
     },
 
-    save_path: '%(save_path)s',
-    save_freq: 1
+    extensions: [
+        !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
+            channel_name: 'objective',
+            save_path: '{save_path}',
+        },
+        !obj:csv_monitoring.CSVMonitoring {
+            name: "Fold {fold}",
+            file: {log_file},
+        },
+    ],
 
 }

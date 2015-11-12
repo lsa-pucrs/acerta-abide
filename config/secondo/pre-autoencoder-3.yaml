@@ -1,11 +1,17 @@
 !obj:pylearn2.train.Train {
 
-    dataset: &train !obj:pylearn2.datasets.csv_dataset.CSVDataset {
-        path: '{data_source}',
-        expect_headers: False,
-        expect_labels: True,
-        start: {data_train_start},
-        stop: {data_train_stop}
+    dataset: &train !obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
+        raw: !obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
+            raw: !obj:pylearn2.datasets.csv_dataset.CSVDataset {
+                path: '{data_source}',
+                expect_headers: False,
+                expect_labels: True,
+                start: {data_train_start},
+                stop: {data_train_stop}
+            },
+            transformer: !pkl: {data_transform_1}
+        },
+        transformer: !pkl: {data_transform_2}
     },
 
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
@@ -30,13 +36,12 @@
     },
 
     extensions: [
-        !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
+        !obj:best_params.MonitorBasedSaveBest {
             channel_name: 'objective',
             save_path: '{save_path}',
         },
         !obj:csv_monitoring.CSVMonitoring {
-            name: "Fold {fold}",
-            file: {log_file},
+            file: {log_file}
         },
     ],
 
