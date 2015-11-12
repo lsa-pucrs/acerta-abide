@@ -1,3 +1,4 @@
+import os
 import multiprocessing as mp
 import numpy as np
 import numpy.ma as ma
@@ -7,6 +8,8 @@ from tabulate import tabulate
 from functools import partial
 import sys, time
 import re
+from sklearn import preprocessing
+from sklearn import cross_validation
 
 def compute_parcellations(functional, mask):
     mask_vals = np.unique( mask )
@@ -25,12 +28,12 @@ def compute_connectivity(functional):
 
 def load_patient(subj, mask=None, patient_template=None):
     functional = nb.load(patient_template % subj).get_data()
-    flatten_shape = ( np.prod( functional.shape[0:3] ) , np.prod(functional.shape[3:]) )
+    flatten_shape = ( np.prod(functional.shape[0:3]) , np.prod(functional.shape[3:]) )
     functional = np.reshape( functional , flatten_shape )
     if mask is not None:
         functional = compute_parcellations(functional, mask)
     functional = compute_connectivity(functional)
-    return subj, functional
+    return subj, functional.tolist()
 
 def load_patients(subjs, mask, patient_template, jobs=10):
 
@@ -59,7 +62,7 @@ def load_patients(subjs, mask, patient_template, jobs=10):
     return results;
 
 def load_phenotypes(file):
-    phenotypes = []
+    phenotypes = {}
     with open(file, 'rb') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
@@ -68,57 +71,85 @@ def load_phenotypes(file):
                 continue
             if row['DX_GROUP'] not in ['1', '2']:
                 continue
-            if row['SEX'] not in ['1', '2']:
-                continue
-            phenotypes.append([ subj, row['DX_GROUP'], row['SEX'], re.sub('_[0-9]', '', row['SITE_ID']) ])
-    return np.array(phenotypes)
+            # if row['SEX'] not in ['1', '2']:
+            #     continue
+            phenotypes[subj] = [ int(row['DX_GROUP'])-1, row['SEX'], re.sub('_[0-9]', '', row['SITE_ID']) ]
+    return phenotypes
 
 def prepare_data(phenotypes_file, mask, patient_template):
+
     phenotypes = load_phenotypes(phenotypes_file)
-    results = load_patients(phenotypes[:,0],
-                             mask=mask,
-                             patient_template=patient_template)
-    data = {}
-    for result in results:
-        classification = phenotypes[np.where( ( phenotypes[:,0] == result[0] ) )[0][0]][1]
-        data[result[0]] = np.insert(result[1], 0, classification, 0)
+    results = load_patients(phenotypes.keys(), mask=mask, patient_template=patient_template)
 
-    institutesset = set([ re.sub('_[0-9]', '', x) for x in set(phenotypes[:,3]) ])
+    features = []
+    ids = []
+    classes = []
+    for pid, feats in results:
+        features.append(feats)
+        ids.append(pid)
+        classes.append(phenotypes[pid][0])
 
-    male = ( phenotypes[:,2] == '1' )
-    female = ( phenotypes[:,2] == '2' )
-    results = { x: [
-        len(np.where( ( phenotypes[:,3] == x ) )[0]),
-        len(np.where( ( phenotypes[:,3] == x ) & male )[0]),
-        len(np.where( ( phenotypes[:,3] == x ) & female )[0]),
-    ] for x in institutesset }
+    features = np.array(features).astype(np.float32)
+    classes = np.array(classes)
 
-    results = [ [x]+results[x] for x in results ]
-    results.append(['',
-        str(len(phenotypes)),
-        str(len(np.where(male)[0])),
-        str(len(np.where(female)[0]))
-    ])
+    # institutesset = set([ re.sub('_[0-9]', '', x) for x in set(phenotypes[:,3]) ])
 
-    print tabulate(results, headers=['Total', 'Male', 'Female'], tablefmt='grid')
+    # male = ( phenotypes[:,2] == '1' )
+    # female = ( phenotypes[:,2] == '2' )
+    # results = { x: [
+    #     len(np.where( ( phenotypes[:,3] == x ) )[0]),
+    #     len(np.where( ( phenotypes[:,3] == x ) & male )[0]),
+    #     len(np.where( ( phenotypes[:,3] == x ) & female )[0]),
+    # ] for x in institutesset }
 
-    for institute in institutesset:
-        patients_ids = phenotypes[np.where((phenotypes[:,3] != institute))][:,0]
-        results = np.array([ data[p] for p in patients_ids ])
-        np.savetxt('./data/corr/corr-looeft-'+ institute +'.csv', results, delimiter=',')
-        results[:,1:] = results[:,1:] + 1
-        results[:,1:] = results[:,1:] / 2
-        np.savetxt('./data/corr/corr-norm-looeft-'+ institute +'.csv', results, delimiter=',')
+    # results = [ [x]+results[x] for x in results ]
 
-    patients_ids = phenotypes[:,0]
-    results = np.array([ data[p] for p in patients_ids ])
-    np.savetxt('./data/corr/corr.csv', results, delimiter=',')
-    results[:,1:] = results[:,1:] + 1
-    results[:,1:] = results[:,1:] / 2
-    np.savetxt('./data/corr/corr-norm.csv', results, delimiter=',')
+    # results.append(['',
+    #     str(len(phenotypes)),
+    #     str(len(np.where(male)[0])),
+    #     str(len(np.where(female)[0]))
+    # ])
+
+    # print tabulate(results, headers=['Total', 'Male', 'Female'], tablefmt='grid')
+
+    # for institute in institutesset:
+    #     patients_ids = phenotypes[np.where((phenotypes[:,3] != institute))][:,0]
+    #     results = np.array(list([ data[p] for p in patients_ids ]))
+    #     np.savetxt('./data/corr/corr-looeft-'+ institute +'.csv', results, delimiter=',')
+        # results[:,1:] = results[:,1:] + 1
+        # results[:,1:] = results[:,1:] / 2
+        # np.savetxt('./data/corr/corr-norm-looeft-'+ institute +'.csv', results, delimiter=',')
+
+    print np.unique(classes)
+
+    print features.shape, features.dtype
+    print np.min(features), np.max(features)
+    np.savetxt('./data/corr/corr.csv', np.insert(features, 0, classes, axis=1), delimiter=',')
+
+    # scaled = preprocessing.scale(features, axis=0)
+    # print scaled.shape, scaled.dtype
+    # print np.min(scaled), np.max(scaled)
+    # np.savetxt('./data/corr/corr-norm.csv', np.insert(scaled, 0, classes, axis=1), delimiter=',')
+
+def prepare_data_cv(filename, folds, seed=42):
+    name, extension = os.path.splitext(filename)
+    data = np.loadtxt(filename, delimiter=',')
+    X = data[:,1:]
+    y = data[:,0]
+    cv = cross_validation.StratifiedKFold(y=y, n_folds=folds, shuffle=True, random_state=seed)
+    for fold, (train_index, test_index) in enumerate(cv):
+        fold = str(fold + 1)
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+        train = np.insert(X_train, 0, y_train, 1)
+        test = np.insert(X_test, 0, y_test, 1)
+        np.savetxt(name + '_cv_' + fold + '_train' + extension, train, delimiter=',')
+        np.savetxt(name + '_cv_' + fold + '_test' + extension, test, delimiter=',')
 
 if __name__ == "__main__":
 
     prepare_data('./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv',
                  './data/masks/cc200.nii.gz',
-                 './data/functionals/%s_func_preproc.nii.gz')
+                 './data/functionals/cpac/filt_global/func_preproc/%s_func_preproc.nii.gz')
+    prepare_data_cv('./data/corr/corr.csv', 10, seed=42)
+    # prepare_data_cv('./data/corr/corr-norm.csv', 10, seed=19)

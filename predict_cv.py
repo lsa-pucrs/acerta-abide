@@ -1,51 +1,67 @@
-import sys
-import os
-import argparse
+import sys, os, argparse
 import numpy as np
+from functools import partial
+import multiprocessing as mp
 
 from pylearn2.utils import serial
 from theano import tensor as T
 from theano import function
 
-from sklearn.metrics import classification_report
 from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import confusion_matrix
+from tabulate import tabulate
 
-def predict(model_path, test_path, cv_folds):
+def compute_metrics(fold, model_fold_path, test_fold_path):
+    try:
+        model = serial.load(model_fold_path % { 'fold': str(fold) })
+    except Exception as e:
+        print "Error loading {}:".format(model_fold_path % { 'fold': str(fold) })
+        print e
+        return False
 
-    metrics = []
-    for fold in xrange(1, cv_folds + 1):
+    x = np.loadtxt(test_fold_path % { 'fold': str(fold) }, delimiter=',')
 
-        try:
-            model = serial.load(model_path % { 'fold': str(fold) })
-        except Exception as e:
-            print "error loading {}:".format(model_path)
-            print e
-            return False
+    y_true = x[:,0]
+    x = x[:,1:]
 
-        x = np.loadtxt(test_path % { 'fold': str(fold) }, delimiter=',')
+    X = model.get_input_space().make_theano_batch()
+    Y = model.fprop(X)
+    Y_max = T.argmax(Y, axis=1)
 
-        y_true = x[:,0]
-        x = x[:,1:]
+    f = function([X], Y_max, allow_input_downcast=True)
+    f_prob = function([X], Y, allow_input_downcast=True)
 
-        X = model.get_input_space().make_theano_batch()
-        Y = model.fprop(X)
-        Y_max = T.argmax(Y, axis=1)
+    y_pred = f(x)
+    y_prob = f_prob(x)
 
-        f = function([X], Y_max, allow_input_downcast=True)
-        f_prob = function([X], Y, allow_input_downcast=True)
+    [[TN, FP], [FN, TP]] = confusion_matrix(y_true, y_pred).astype(float)
+    accuracy = ( TP + TN ) / ( TP + TN + FP + FN )
+    specificity = TN / ( FP + TN )
+    precision = TP / ( TP + FP )
+    sensivity = recall = TP / ( TP + FN )
+    fscore = 2 * TP / ( 2 * TP + FP + FN )
 
-        y_pred = f(x)
-        y_prob = f_prob(x)
+    return [accuracy, precision, recall, fscore, sensivity, specificity]
 
-        metrics.append(list(precision_recall_fscore_support(y_true, y_pred, average='binary')[0:3]))
+def predict(model_path, test_path, cv_folds, jobs=1):
 
+    name, extension = os.path.splitext(model_path)
+    model_fold_path = name + '_cv_%(fold)s' + extension
 
-    metrics.append(np.mean(metrics, axis=0))
-    metrics = np.insert(np.array(metrics, dtype=str), 0, range(1, cv_folds + 1) + ['Mean'], 1)
+    name, extension = os.path.splitext(test_path)
+    test_fold_path = name + '_cv_%(fold)s_test' + extension
 
-    print tabulate(metrics, headers=['Fold', 'Precision', 'Recall', 'F-score'], tablefmt='grid')
+    partial_compute_metrics = partial(compute_metrics, model_fold_path=model_fold_path, test_fold_path=test_fold_path)
+    folds = xrange(1, cv_folds + 1)
 
-    return True
+    if jobs == 1:
+        metrics = []
+        for fold in folds:
+            metrics.append(partial_compute_metrics(fold))
+    else:
+        pool = mp.Pool(processes=jobs)
+        metrics = pool.map(partial_compute_metrics, folds)
+    return metrics
 
 if __name__ == "__main__":
 
@@ -55,7 +71,8 @@ if __name__ == "__main__":
     parser.add_argument('cv_folds', help='CV Folds', type=int)
     args = parser.parse_args()
 
-    ret = predict(args.model_filename, args.test_filename, args.cv_folds)
-    if not ret:
-        sys.exit(-1)
+    metrics = predict(args.model_filename, args.test_filename, args.cv_folds)
+    metrics.append(np.mean(metrics, axis=0))
+    metrics = np.insert(np.array(metrics, dtype=str), 0, range(1, args.cv_folds + 1) + ['Mean'], 1)
 
+    print tabulate(metrics, headers=['Fold', 'Accuracy', 'Precision', 'Recall', 'F-score', 'Sensivity', 'Specificity'], tablefmt='grid', floatfmt=".4f")
