@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 
 from pylearn2.utils import serial
+import theano
 from theano import tensor as T
 from theano import function
 
@@ -50,13 +51,16 @@ if __name__ == "__main__":
             print "Loading data", data_fold_test_path
             X_test, y_test = load(data_fold_test_path)
 
-            X_train = X_train.astype(np.float32)
-            X_test = X_test.astype(np.float32)
+            X_train = X_train.astype(theano.config.floatX)
+            X_test = X_test.astype(theano.config.floatX)
 
             y_train = y_train.astype(int)
             y_test = y_test.astype(int)
 
+            last = args.model_filename[-1]
             for model_i, model_filename in enumerate(args.model_filename):
+
+                is_last = last == model_filename
 
                 name, extension = os.path.splitext(model_filename)
                 model_fold_path = ( name + '_cv_%(fold)s' + extension ) % {'fold': fold}
@@ -68,20 +72,24 @@ if __name__ == "__main__":
                 model_class = model.__class__.__name__
 
                 if model_class == 'MLP':
+                    last_layer = model.layers[-2].layer_name
                     for i, l in enumerate(model.layers):
+                        print last_layer, l.layer_name
                         if not hasattr(l, 'layer_content'):
                             break
                         X_train, y_train = transform(l.layer_content, X_train, y_train)
                         X_test, y_test = transform(l.layer_content, X_test, y_test)
-                        save(X_train, y_train, data_destination_fold_train_path % { 'model': model_name + '.' + l.layer_name })
-                        save(X_test, y_test, data_destination_fold_test_path  % { 'model': model_name + '.' + l.layer_name })
+                        if last_layer == l.layer_name:
+                            save(X_train, y_train, data_destination_fold_train_path % { 'model': model_name + '.' + l.layer_name })
+                            save(X_test, y_test, data_destination_fold_test_path  % { 'model': model_name + '.' + l.layer_name })
                 else:
                     X_train, y_train = transform(model, X_train, y_train)
                     X_test, y_test = transform(model, X_test, y_test)
-                    save(X_train, y_train, data_destination_fold_train_path % { 'model': model_name })
-                    save(X_test, y_test, data_destination_fold_test_path % { 'model': model_name })
+                    if is_last:
+                        save(X_train, y_train, data_destination_fold_train_path % { 'model': model_name })
+                        save(X_test, y_test, data_destination_fold_test_path % { 'model': model_name })
 
-                print 'Performed', model_filename
+                print 'Performed', model_fold_path
 
     except Exception as e:
         print e
@@ -93,3 +101,10 @@ if __name__ == "__main__":
 # THEANO_FLAGS="device=gpu1,floatX=float32" python export_data_cv.py --last 1-10 \
 # data/corr/corr.csv data/trans/corr.csv \
 # result-external/models/secondo.deep-4.MLP.pkl
+
+# THEANO_FLAGS="device=gpu1,floatX=float32" python export_data_cv.py --last 1 \
+# data/corr/corr_1D-gauss.csv \
+# data/trans/corr_1D-gauss.grbm.csv  \
+# result/grbm.original.grbm-1.pkl \
+# result/grbm.original.grbm-2.pkl \
+# result/grbm.original.grbm-3.pkl

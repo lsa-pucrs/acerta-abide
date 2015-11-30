@@ -7,9 +7,10 @@ from pylearn2.utils import serial
 from theano import tensor as T
 from theano import function
 
-from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import confusion_matrix
 from tabulate import tabulate
+
+from utils import config_dict, compute_config, format_config, elapsed_time, nrangearg
 
 def compute_metrics(fold, model_fold_path, test_fold_path):
     try:
@@ -52,15 +53,14 @@ def predict(model_path, test_path, cv_folds, jobs=1):
     test_fold_path = name + '_cv_%(fold)s_test' + extension
 
     partial_compute_metrics = partial(compute_metrics, model_fold_path=model_fold_path, test_fold_path=test_fold_path)
-    folds = xrange(1, cv_folds + 1)
 
     if jobs == 1:
         metrics = []
-        for fold in folds:
+        for fold in cv_folds:
             metrics.append(partial_compute_metrics(fold))
     else:
         pool = mp.Pool(processes=jobs)
-        metrics = pool.map(partial_compute_metrics, folds)
+        metrics = pool.map(partial_compute_metrics, cv_folds)
     return metrics
 
 if __name__ == "__main__":
@@ -68,11 +68,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Launch a prediction from a pkl file")
     parser.add_argument('model_filename', help='Specifies the pkl model file ( %(fold)s for fold replacement )')
     parser.add_argument('test_filename', help='Specifies the csv file with the values to predict ( %(fold)s for fold replacement )')
-    parser.add_argument('cv_folds', help='CV Folds', type=int)
+    parser.add_argument('cv_folds', type=nrangearg, help='CV Folds')
     args = parser.parse_args()
 
     metrics = predict(args.model_filename, args.test_filename, args.cv_folds)
     metrics.append(np.mean(metrics, axis=0))
-    metrics = np.insert(np.array(metrics, dtype=str), 0, range(1, args.cv_folds + 1) + ['Mean'], 1)
+    metrics = np.insert(np.array(metrics, dtype=str), 0, args.cv_folds + ['Mean'], 1)
 
     print tabulate(metrics, headers=['Fold', 'Accuracy', 'Precision', 'Recall', 'F-score', 'Sensivity', 'Specificity'], tablefmt='grid', floatfmt=".4f")

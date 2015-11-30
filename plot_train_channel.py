@@ -21,12 +21,13 @@ def files(model, config, step, cv_folds):
             df.columns = ['channel', 'epoch', 'value']
             yield df
         except Exception, e:
-            logger.critical('Path %s: %s', csv_path, e)
+            # logger.critical('Path %s: %s', csv_path, e)
             yield None
 
-def update_plot(frame, ax, model, config, step, channels, cv_folds, epochs, mean=False):
+def update_plot(frame, fig, ax, model, config, step, channels, cv_folds, epochs, mean=False):
 
     values = []
+    total_epochs = np.max(epochs)
     for i, df in enumerate(files(model, config, step, cv_folds)):
 
         values.append([])
@@ -36,24 +37,33 @@ def update_plot(frame, ax, model, config, step, channels, cv_folds, epochs, mean
             continue
 
         for j, channel in enumerate(channels):
-            channel_values = np.array(df[df['channel'] == channel]['value'].tolist()).flatten().tolist()
-            if len(channel_values) < epochs:
-                channel_values = channel_values + [np.nan] * (epochs - len(channel_values) + 1)
-            if channel_values is None:
-                channel_values = [np.nan] * epochs
+            channel_values = [np.nan] * (total_epochs + 1)
+            for epoch in range(total_epochs):
+                s = df.loc[df.channel == channel,:].loc[df.epoch == epoch,:].value
+                if s.size > 0:
+                    channel_values[epoch] = s.values[0]
             values[i].append(channel_values)
 
     values = np.array(values)
+
     if mean:
         values = np.array([np.mean(values, axis=0)])
 
-    if args.epochs is not None:
-        ax.set_xlim([0, args.epochs])
+    fig.clear()
+    ax = fig.add_subplot(1,1,1)
+
+    if epochs is not None:
+        min_value = np.nanmin(values[:,:,epochs])
+        max_value = np.nanmax(values[:,:,epochs])
+        ax.set_ylim([min_value / 1.1, max_value * 1.1])
+        ax.set_xlim([min(epochs), max(epochs)])
 
     colors = sns.color_palette(n_colors=values.shape[0] if values.shape[0] > 1 else len(channels))
     for f, fold in enumerate(values):
         for c, v in enumerate(fold):
-            ax.plot(v, c=colors[f if values.shape[0] > 1 else c])
+            ax.plot(v, c=colors[f if values.shape[0] > 1 else c], label=channels[c])
+
+    ax.legend(loc=2)
 
 if __name__ == "__main__":
 
@@ -67,7 +77,7 @@ if __name__ == "__main__":
     parser.add_argument('step', help='Step')
     parser.add_argument('cv_folds', type=nrangearg, help='CV Folds')
     parser.add_argument('channel', help='Channel', nargs='?', default=None)
-    parser.add_argument('--epochs', type=int, help='Epochs')
+    parser.add_argument('--epochs', type=nrangearg, help='Epochs')
     parser.add_argument('--mean', action='store_true', help='Mean of folds')
     args = parser.parse_args()
 
@@ -81,10 +91,11 @@ if __name__ == "__main__":
     fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
 
-    update_func = partial(update_plot, ax=ax, model=args.model, config=args.config,
+    update_func = partial(update_plot, fig=fig, ax=ax, model=args.model, config=args.config,
                             step=args.step, channels=args.channel.split(','),
                             cv_folds=args.cv_folds, epochs=args.epochs, mean=args.mean)
 
     ani = animation.FuncAnimation(fig, update_func, interval=1000)
 
     plt.show()
+    ax.legend(loc=3)

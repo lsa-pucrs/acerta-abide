@@ -1,6 +1,6 @@
 !obj:pylearn2.train.Train {
 
-    dataset: &train !obj:csv_dataset.CSVDataset {
+    dataset: &train !obj:pylearn2.datasets.csv_dataset.CSVDataset {
         path: '{data_source}',
         expect_headers: False,
         expect_labels: True,
@@ -16,17 +16,13 @@
                 layer_name: 'h1',
                 layer_content: !pkl: {data_transform_1},
             },
-            !obj:pylearn2.models.mlp.PretrainedLayer {
-                layer_name: 'h2',
-                layer_content: !pkl: {data_transform_2},
-            },
+            # !obj:pylearn2.models.mlp.PretrainedLayer {
+            #     layer_name: 'h2',
+            #     layer_content: !pkl: {data_transform_2},
+            # },
             # !obj:pylearn2.models.mlp.PretrainedLayer {
             #     layer_name: 'h3',
             #     layer_content: !pkl: {data_transform_3},
-            # },
-            # !obj:pylearn2.models.mlp.PretrainedLayer {
-            #     layer_name: 'h4',
-            #     layer_content: !pkl: {data_transform_4},
             # },
             !obj:pylearn2.models.mlp.Softmax {
                 max_col_norm: 1.9365,
@@ -36,23 +32,21 @@
             },
         ],
     },
-
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
         learning_rate: .05,
         learning_rule: !obj:pylearn2.training_algorithms.learning_rule.Momentum {
             init_momentum: .5,
         },
-        monitor_iteration_mode: even_sequential,
         monitoring_dataset: {
             'train': *train,
-            'valid': !obj:csv_dataset.CSVDataset {
+            'valid': !obj:pylearn2.datasets.csv_dataset.CSVDataset {
                 path: '{data_source}',
                 expect_headers: False,
                 expect_labels: True,
                 start: {data_valid_start},
                 stop: {data_valid_stop},
             },
-            'test': !obj:csv_dataset.CSVDataset {
+            'test': !obj:pylearn2.datasets.csv_dataset.CSVDataset {
                 path: '{test_data_source}',
                 expect_headers: False,
                 expect_labels: True,
@@ -69,7 +63,6 @@
             min_lr: .000001,
         },
     },
-
     extensions: [
         !obj:pylearn2.training_algorithms.learning_rule.MomentumAdjustor {
             start: 1,

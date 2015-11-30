@@ -1,7 +1,7 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:csv_dataset.CSVDataset {
-        path: '{data_source}',
+        path: "{data_source}",
         expect_headers: False,
         expect_labels: True,
         start: {data_train_start},
@@ -13,24 +13,15 @@
         nvis: {layer_in},
         layers: [
             !obj:pylearn2.models.mlp.PretrainedLayer {
-                layer_name: 'h1',
+                layer_name: "h1",
                 layer_content: !pkl: {data_transform_1},
             },
             !obj:pylearn2.models.mlp.PretrainedLayer {
-                layer_name: 'h2',
+                layer_name: "h2",
                 layer_content: !pkl: {data_transform_2},
             },
-            # !obj:pylearn2.models.mlp.PretrainedLayer {
-            #     layer_name: 'h3',
-            #     layer_content: !pkl: {data_transform_3},
-            # },
-            # !obj:pylearn2.models.mlp.PretrainedLayer {
-            #     layer_name: 'h4',
-            #     layer_content: !pkl: {data_transform_4},
-            # },
             !obj:pylearn2.models.mlp.Softmax {
-                max_col_norm: 1.9365,
-                layer_name: 'y',
+                layer_name: "y",
                 n_classes: 2,
                 irange: .005,
             },
@@ -42,31 +33,30 @@
         learning_rule: !obj:pylearn2.training_algorithms.learning_rule.Momentum {
             init_momentum: .5,
         },
-        monitor_iteration_mode: even_sequential,
+        cost: !obj:pylearn2.costs.mlp.Default {},
+        termination_criterion: !obj:pylearn2.termination_criteria.EpochCounter {
+            max_epochs: {layer_max_epochs},
+        },
+        # update_callbacks: !obj:pylearn2.training_algorithms.sgd.ExponentialDecay {
+        #     decay_factor: 1.00004,
+        #     min_lr: .000001,
+        # },
         monitoring_dataset: {
-            'train': *train,
-            'valid': !obj:csv_dataset.CSVDataset {
-                path: '{data_source}',
+            "train": *train,
+            "valid": !obj:csv_dataset.CSVDataset {
+                path: "{data_source}",
                 expect_headers: False,
                 expect_labels: True,
                 start: {data_valid_start},
                 stop: {data_valid_stop},
             },
-            'test': !obj:csv_dataset.CSVDataset {
-                path: '{test_data_source}',
+            "test": !obj:csv_dataset.CSVDataset {
+                path: "{test_data_source}",
                 expect_headers: False,
                 expect_labels: True,
                 start: 0,
                 stop: 100,
             },
-        },
-        cost: !obj:pylearn2.costs.mlp.Default {},
-        termination_criterion: !obj:pylearn2.termination_criteria.EpochCounter {
-            max_epochs: {layer_max_epochs},
-        },
-        update_callbacks: !obj:pylearn2.training_algorithms.sgd.ExponentialDecay {
-            decay_factor: 1.00004,
-            min_lr: .000001,
         },
     },
 

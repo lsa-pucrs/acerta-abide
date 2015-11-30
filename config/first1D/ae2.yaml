@@ -1,11 +1,14 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:csv_dataset.CSVDataset {
-        path: '{data_source}',
+        path: "{data_source}",
         expect_headers: False,
         expect_labels: True,
         start: {data_train_start},
-        stop: {data_train_stop}
+        stop: {data_train_stop},
+        transformers: [
+            &trans1 !pkl: {data_transform_1},
+        ],
     },
 
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
@@ -21,40 +24,45 @@
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : 1e-3,
-        batch_size : {layer_batch},
+        learning_rate: 1e-3,
+        batch_size: {layer_batch},
         monitoring_dataset: {
-            'train': *train,
-            'valid': !obj:csv_dataset.CSVDataset {
-                path: '{data_source}',
+            "train": *train,
+            "valid": !obj:csv_dataset.CSVDataset {
+                path: "{data_source}",
                 expect_headers: False,
                 expect_labels: True,
                 start: {data_valid_start},
                 stop: {data_valid_stop},
+                transformers: [
+                    *trans1
+                ],
             },
-            'test': !obj:csv_dataset.CSVDataset {
-                path: '{test_data_source}',
+            "test": !obj:csv_dataset.CSVDataset {
+                path: "{test_data_source}",
                 expect_headers: False,
                 expect_labels: True,
                 start: 0,
                 stop: 100,
+                transformers: [
+                    *trans1
+                ],
             },
         },
         cost: !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
         termination_criterion: !obj:pylearn2.termination_criteria.EpochCounter {
             max_epochs: {layer_max_epochs},
-        }
+        },
     },
 
     extensions: [
         !obj:best_params.MonitorBasedSaveBest {
              channel_name: "valid_objective",
              save_path: "{save_path}",
-             start_epoch: 20,
         },
         !obj:csv_monitoring.CSVMonitoring {
             name: "{namespace}.{step}.cv_{fold}",
-            file: {log_file}
+            file: {log_file},
         },
     ],
 

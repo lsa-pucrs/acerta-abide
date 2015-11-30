@@ -21,7 +21,7 @@ from utils import *
 
 def svm(X_train, y_train, X_test, y_test):
 
-    clf = SVC()
+    clf = SVC(kernel='linear')
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         metrics = np.insert(np.array(metrics, dtype=str), 0, ["Mean"], 1)
     else:
         metrics.append(np.mean(metrics, axis=0))
-        metrics = np.insert(np.array(metrics, dtype=str), 0, range(1, len(args.cv_folds) + 1) + ["Mean"], 1)
+        metrics = np.insert(np.array(metrics, dtype=str), 0, args.cv_folds + ["Mean"], 1)
 
     tablefmt = "grid"
     if args.latex:
