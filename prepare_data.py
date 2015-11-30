@@ -87,8 +87,8 @@ def load_patients(subjs, mask, tmpl, jobs=10):
     msg = 'Done {current} of {total}'
     return run_progress(partial_load_patient, subjs, message=msg, jobs=jobs)
 
-
 def prepare_data(phenotypes_file, tmpl, destination, mask=None):
+    """TODO Fill in with a description"""
 
     phenotypes = load_phenotypes(phenotypes_file)
     keys = phenotypes.index.get_values()
@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     seed = 42
     folds = 10
-    download_it = False
+    download_it = True
 
     pheno_path = './data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv'
     pheno = load_phenotypes(pheno_path)
@@ -186,11 +186,13 @@ if __name__ == "__main__":
 
                 download_data(url_path, download_file)
 
-    # tmpl = './data/functionals/cpac/filt_global/func_preproc/%s_func_preproc.nii.gz'
-    # prepare_data(pheno_path, tmpl, './data/corr/corr.csv', mask='./data/masks/cc200.nii.gz')
-    # prepare_data_cv('./data/corr/corr.csv', folds, seed=seed)
-    # prepare_data_cv('./data/corr/corr-norm.csv', folds, seed=seed)
+    # Our own pipeline (create our version of CC200)
+    tmpl = './data/functionals/cpac/filt_global/func_preproc/%s_func_preproc.nii.gz'
+    prepare_data(pheno_path, tmpl, './data/corr/corr.csv', mask='./data/masks/cc200.nii.gz') # Apply CC200 and create the connectivity matrix
+    prepare_data_cv('./data/corr/corr.csv', folds, seed=seed) # Create folds for training and cv
+    prepare_data_cv('./data/corr/corr-norm.csv', folds, seed=seed) # Scale data to mean 0 sd 1
 
+    # ABIDE's pipeline (their own CC200 parcellations)
     tmpl = './data/functionals/cpac/filt_global/rois_cc200/%s_rois_cc200.1D'
     prepare_data(pheno_path, tmpl, './data/corr/corr_1D.csv')
     prepare_data_cv('./data/corr/corr_1D.csv', folds, seed=seed)
