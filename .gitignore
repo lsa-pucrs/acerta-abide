@@ -57,6 +57,7 @@ docs/_build/
 target/
 
 # Datasets
+data/trans/*
 data/corr/*
 data/functionals/*
 
