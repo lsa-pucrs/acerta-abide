@@ -1,9 +1,8 @@
-import sys, csv, logging
+import csv
 from functools import wraps
 from pylearn2.monitor import Monitor
 from pylearn2.train_extensions import TrainExtension
 
-log = logging.getLogger(__name__)
 
 class CSVMonitoring(TrainExtension):
 
@@ -27,5 +26,5 @@ class CSVMonitoring(TrainExtension):
                 row = [channel_name, channel.epoch_record[-1], channel.val_record[-1]]
                 self.csv_writer.writerow(row)
                 self.file_handler.flush()
-        except Exception, e:
+        except Exception:
             pass

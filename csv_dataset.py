@@ -1,69 +1,18 @@
 import numpy as np
 import theano
-from pylearn2.datasets.dense_design_matrix import DenseDesignMatrix
 from pylearn2.utils.string_utils import preprocess
+from pylearn2.datasets.dense_design_matrix import DenseDesignMatrix
+
 
 class CSVDataset(DenseDesignMatrix):
 
-    """
-    A generic class for accessing CSV files
-    labels, if present, should be in the first column
-    if there's no labels, set expect_labels to False
-    if there's no header line in your file, set expect_headers to False
-
-    Parameters
-    ----------
-    path : str
-      The path to the CSV file.
-
-    task : str
-      The type of task in which the dataset will be used -- either
-      "classification" or "regression".  The task determines the shape of the
-      target variable.  For classification, it is a vector; for regression, a
-      matrix.
-
-    expect_labels : bool
-      Whether the CSV file contains a target variable in the first column.
-
-    expect_headers : bool
-      Whether the CSV file contains column headers.
-
-    delimiter : str
-      The CSV file's delimiter.
-
-    start : int
-      The first row of the CSV file to load.
-
-    stop : int
-      The last row of the CSV file to load.
-
-    start_fraction : float
-      The fraction of rows, starting at the beginning of the file, to load.
-
-    end_fraction : float
-      The fraction of rows, starting at the end of the file, to load.
-
-    num_outputs : int, optional
-        number of target variables. defaults to 1
-
-    """
-    def __init__(self,
-                 path='train.csv',
-                 task='classification',
-                 expect_labels=True,
-                 expect_headers=True,
-                 delimiter=',',
-                 start=None,
-                 stop=None,
-                 start_fraction=None,
-                 end_fraction=None,
-                 batch_size=None,
-                 num_outputs=1,
-                 transformers=[],
-                 **kwargs):
+    def __init__(self, path='train.csv',
+                 expect_labels=True, expect_headers=True,
+                 delimiter=',', start=None, stop=None,
+                 start_fraction=None, end_fraction=None,
+                 batch_size=None, num_outputs=1, transformers=[], **kwargs):
 
         self.path = path
-        self.task = task
         self.expect_labels = expect_labels
         self.expect_headers = expect_headers
         self.delimiter = delimiter
@@ -73,11 +22,6 @@ class CSVDataset(DenseDesignMatrix):
         self.batch_size = batch_size
         self.end_fraction = end_fraction
         self.num_outputs = num_outputs
-        self.view_converter = None
-
-        if task not in ['classification', 'regression']:
-            raise ValueError('task must be either "classification" or '
-                             '"regression"; got ' + str(task))
 
         if start_fraction is not None:
             if end_fraction is not None:
@@ -107,76 +51,39 @@ class CSVDataset(DenseDesignMatrix):
                 raise ValueError("Use stop, start_fraction, or end_fraction,"
                                  " just not together.")
 
-        # and go
         self.path = preprocess(self.path)
         X, y = self._load_data()
 
         for trans in transformers:
-          X = trans.perform(X)
+            X = trans.perform(X)
 
-        if self.task == 'regression':
-            super(CSVDataset, self).__init__(X=X, y=y, **kwargs)
-        else:
-            super(CSVDataset, self).__init__(X=X, y=y,
-                                             y_labels=np.max(y) + 1, **kwargs)
+        super(CSVDataset, self).__init__(X=X, y=y, y_labels=np.max(y) + 1, **kwargs)
 
     def _load_data(self):
-        """
-            Loads the data from a CSV file (ending with a '.csv' filename).
 
-            Returns
-                -------
-                X : object
-                    The features of the dataset.
-                y : object, optional
-                    The target variable of the model.
-        """
         assert self.path.endswith('.csv')
-
         if self.expect_headers:
-            data = np.loadtxt(self.path,
-                              delimiter=self.delimiter,
-                              skiprows=1)
+            data = np.loadtxt(self.path, delimiter=self.delimiter, skiprows=1)
         else:
             data = np.loadtxt(self.path, delimiter=self.delimiter)
 
         def take_subset(X, y):
-            """
-                Takes a subset of the dataset if the start_fraction,
-                stop_fraction or start/stop parameter of the class
-                is set.
-
-                Parameters
-                ----------
-                X : object
-                    The features of the dataset.
-                y : object, optional
-                    The target variable of the model.
-
-                Returns
-                -------
-                X : object
-                    The subset of the features of the dataset.
-                y : object, optional
-                    The subset of the target variable of the model.
-
-            """
             if self.start_fraction is not None:
                 n = X.shape[0]
                 subset_end = int(self.start_fraction * n)
                 if self.batch_size is not None:
-                    subset_end = subset_end - ( subset_end % batch_size )
+                    subset_end = subset_end - (subset_end % self.batch_size)
                 X = X[0:subset_end, :]
                 y = y[0:subset_end]
             elif self.end_fraction is not None:
                 n = X.shape[0]
                 subset_start = int((1 - self.end_fraction) * n)
                 if self.batch_size is not None:
-                  subset_start = subset_start + ((n - subset_start) % self.batch_size)
+                    subset_start = subset_start + ((n - subset_start) % self.batch_size)
                 X = X[subset_start:, ]
                 y = y[subset_start:]
             elif self.start is not None:
-                X = X[self.start:self.stop,]
+                X = X[self.start:self.stop, ]
                 if y is not None:
                     y = y[self.start:self.stop]
 

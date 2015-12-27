@@ -48,7 +48,7 @@ def analyse_phenotype(phenotype_filename):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Check .csv file")
-    parser.add_argument('data_filename', help='Specifies the csv file with the values to transform')
+    parser.add_argument('data_filename', help='Specifies the csv file with the values to analyse.')
     args = parser.parse_args()
 
     analyse_phenotype(args.data_filename)

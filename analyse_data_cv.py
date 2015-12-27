@@ -22,18 +22,28 @@ def load_phenotypes(file):
 
 def analyse_data(data_filename, pheno_filename, phenotypes, print_metrics=True, print_classes=True):
 
-    # data = np.loadtxt(data_filename, dtype=float, delimiter=',')
-    # classes =  data[:,0]
-    # features = data[:,1:]
+    data = np.loadtxt(data_filename, dtype=float, delimiter=',')
+    classes =  data[:,0]
+    features = data[:,1:]
+
+    print tabulate([[data_filename]], tablefmt='grid')
+    metrics = [[features.shape[0], features.shape[1], np.min(features), np.max(features)]]
+    print tabulate(metrics, headers=['Examples','Features', 'Min', 'Max'], tablefmt='grid')
+
+    class_names, counts = np.unique(classes, return_counts=True)
+    results = np.array([
+        class_names,
+        counts
+    ])
+    print tabulate(results.T, headers=['Classes', 'Count'], tablefmt='grid')
 
     pheno = np.loadtxt(pheno_filename, delimiter=',', dtype=str)
 
     sex = pheno[:,2].tolist()
     print ','.join([ x + ':' + str(sex.count(x)) for x in set(sex)])
 
-    # inst = pheno[:,3].tolist()
-    # print ','.join([ x + ':' + str(inst.count(x)) for x in sorted(set(inst))])
-
+    inst = pheno[:,3].tolist()
+    print ','.join([ x + ':' + str(inst.count(x)) for x in sorted(set(inst))])
 
 
 if __name__ == "__main__":

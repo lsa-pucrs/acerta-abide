@@ -1,20 +1,14 @@
-import os, re, sys, time, yaml, argparse, traceback
-import multiprocessing
+import os
+import sys
+import time
+import yaml
+import argparse
+import traceback
+from functools import partial
 from utils import *
 
+
 def run_model(fold_config):
-
-    if 'fold_queue' in fold_config:
-        q = fold_config['fold_queue']
-        gpu = q.get(True)
-        os.environ['THEANO_FLAGS'] = "device=" + gpu
-    else:
-        os.environ['THEANO_FLAGS'] = "device=cpu"
-
-    os.environ['THEANO_FLAGS'] = os.environ['THEANO_FLAGS'] + "," + \
-                                "floatX=float32," + \
-                                "nvcc.fastmath=True," + \
-                                "base_compiledir=/tmp/theano/" + str(os.getpid())
 
     from pylearn2.config import yaml_parse
     from pylearn2.utils import serial
@@ -56,8 +50,6 @@ def run_model(fold_config):
         traceback.print_exc(file=sys.stdout)
         raise e
 
-    if 'queue' in fold_config:
-        q.put(gpu)
 
 def run_config_cv(config, gpus, threads):
 
@@ -74,14 +66,15 @@ def run_config_cv(config, gpus, threads):
         step_config['step'] = step
         step_config = compute_config(yaml_config, step_config, replace=False)
 
-        run_parallel(step_config, run_model, gpus=gpus, threads=threads, concurr_key='fold')
+        theano_run = partial(parallel_theano, execute=run_model, concurr_key='fold')
+        run_parallel(theano_run, step_config, gpus=gpus, threads=threads, concurr_key='fold')
 
     print "%s: %s" % ("Total", elapsed_time(t0))
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Run cv deep-learning pipeline.')
-    parser.add_argument('model', help='Model')
+    parser.add_argument('pipeline', help='Pipeline')
     parser.add_argument('config', help='Config')
     parser.add_argument('cv_folds', type=nrangearg, help='CV Folds')
     parser.add_argument('--experiment', type=str, default=None, help='Experiment ID')
@@ -97,14 +90,15 @@ if __name__ == "__main__":
         'experiment_path': here + '/experiments/{namespace}/{run}',
         'experiment_config_path': '{experiment_path}/config',
         'log_path': '{experiment_path}/logs',
+        'analysis_path': '{experiment_path}/analysis',
         'result_path': '{experiment_path}/models',
     }
 
-    config['run_config_path'] = config['config_path'] + '/' + args.model
-    config['run_config_file'] = config['config_path'] + '/' + args.model + '/' + args.config + '.yaml'
+    config['run_config_path'] = config['config_path'] + '/' + args.pipeline
+    config['run_config_file'] = config['config_path'] + '/' + args.pipeline + '/' + args.config + '.yaml'
 
-    config['namespace'] = args.model + '.' + args.config
-    config['model'] = args.model
+    config['namespace'] = args.pipeline + '.' + args.config
+    config['pipeline'] = args.pipeline
     config['config'] = args.config
     config['fold'] = args.cv_folds
 
@@ -125,9 +119,10 @@ if __name__ == "__main__":
     config = compute_config(config)
     config = compute_config(config)
 
-    os.makedirs(config['experiment_path'])
-    os.makedirs(config['log_path'])
-    os.makedirs(config['result_path'])
-    os.makedirs(config['experiment_config_path'])
+    if not os.path.isdir(config['experiment_path']):
+        os.makedirs(config['experiment_path'])
+        os.makedirs(config['log_path'])
+        os.makedirs(config['result_path'])
+        os.makedirs(config['experiment_config_path'])
 
     run_config_cv(config, gpus=args.gpus, threads=args.threads)

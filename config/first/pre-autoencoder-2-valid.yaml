@@ -23,7 +23,7 @@
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : 1e-4,
+        learning_rate : 1e-3,
         batch_size : {layer_batch},
         monitoring_dataset: {
             "train": *train,
@@ -58,7 +58,6 @@
         !obj:best_params.MonitorBasedSaveBest {
              channel_name: "valid_objective",
              save_path: "{save_path}",
-             start_epoch: 20,
         },
         !obj:csv_monitoring.CSVMonitoring {
             name: "{namespace}.{step}.cv_{fold}",

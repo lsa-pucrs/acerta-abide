@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title></title>
+    <meta charset="utf-8" />
+    <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+    <style>
+
+      html, body { background:#F5F5F5; margin:0; padding:0; text-align:center;
+        font-family:'Lato', sans-serif; }
+
+      #container { position: absolute; top:0; bottom:0; left:0; right:0; width: 100%; height: 100%; }
+      #filter, #draw { position: absolute; }
+      #filter { width:20%; top:0; bottom:0; left:0; }
+      #draw { width:80%; top:0; bottom:0; left:20%; }
+
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="filter">
+        <input class="col-md-12" type="text" id="namespace" value="first.valid">
+        <select class="col-md-12" multiple id="experiment"></select>
+        <select class="col-md-9" multiple size="10" id="model"></select>
+        <select class="col-md-3" multiple size="10" id="cv"></select>
+        <select class="col-md-12" size="20" multiple id="channel"></select>
+        <button class="pull-right btn btn-default">Filter</button>
+      </div>
+      <div id="draw">
+      </div>
+    </div>
+    <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js" charset="utf-8"></script>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="static/plots.js" charset="utf-8"></script>
+  </body>
+</html>

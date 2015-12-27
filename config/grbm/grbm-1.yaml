@@ -15,7 +15,7 @@
         energy_function_class: !obj:pylearn2.energy_functions.rbm_energy.grbm_type_1 {},
         learn_sigma: True,
         init_sigma: .4,
-        init_bias_hid: -2.,
+        init_bias_hid: -0.2,
         mean_vis: False,
         sigma_lr_scale: 1e-3,
     },

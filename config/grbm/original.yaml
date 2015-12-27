@@ -24,7 +24,7 @@
     },
     rbm-1: {
       layer_in: 17955,
-      layer_out: 1000,
+      layer_out: 10000,
       layer_batch: 100,
       layer_max_epochs: 100,
     },

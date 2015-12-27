@@ -12,7 +12,7 @@
         nvis: {layer_in},
         nhid: {layer_out},
         irange: 0.05,
-        tied_weights: True,
+        # tied_weights: True,
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
             corruption_level: {corruption},
         },
@@ -21,7 +21,7 @@
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate: 1e-2,
+        learning_rate: 1e-3,
         batch_size: {layer_batch},
         monitoring_dataset: {
             "train": *train,
@@ -40,7 +40,7 @@
                 stop: 100,
             },
         },
-        cost: !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
+        cost: !obj:pylearn2.costs.autoencoder.MeanBinaryCrossEntropy {},
         termination_criterion: !obj:pylearn2.termination_criteria.EpochCounter {
             max_epochs: {layer_max_epochs},
         }

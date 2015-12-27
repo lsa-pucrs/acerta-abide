@@ -1,0 +1,34 @@
+---
+{
+  pipeline: [
+    'autoencoder',
+    'mlp',
+  ],
+  config: {
+    common: {
+      data_source: '{data_path}/trans/fine-tunned/corr.fine-tunned.valid-one.mlp.h1_cv_{fold}_train.csv',
+      test_data_source: '{data_path}/trans/fine-tunned/corr.fine-tunned.valid-one.mlp.h1_cv_{fold}_test.csv',
+      log_file: '{log_path}/fine-tunned/{namespace}.{step}.cv_{fold}.csv',
+      data_train_start: 0,
+      data_train_stop: 900,
+      data_valid_start: 900,
+      data_valid_stop: 930,
+      data_transform: '{result_path}/fine-tunned/{namespace}.autoencoder_cv_{fold}.pkl',
+      layer_in: 6000,
+    },
+    autoencoder: {
+      save_path: '{result_path}/fine-tunned/{namespace}.{step}_cv_{fold}.pkl',
+      layer_out: 1000,
+      layer_enc: tanh,
+      layer_dec: 'null',
+      layer_batch: 100,
+      layer_max_epochs: 600,
+      corruption: 0.3,
+    },
+    mlp: {
+      save_path: '{result_path}/fine-tunned/{namespace}.{step}_cv_{fold}.pkl',
+      layer_max_epochs: 200,
+      layer_batch: 100,
+    },
+  }
+}

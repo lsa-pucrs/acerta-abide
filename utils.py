@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import os
 import sys
 import re
 import time
@@ -15,6 +16,7 @@ def load_phenotypes(pheno_path):
     pheno['SITE_ID'] = pheno['SITE_ID'].apply(lambda v: re.sub('_[0-9]', '', v))
     pheno.index = pheno['FILE_ID']
     return pheno[['FILE_ID', 'DX_GROUP', 'SEX', 'SITE_ID']]
+
 
 class config_dict(dict):
     def __missing__(self, key):
@@ -75,7 +77,34 @@ def elapsed_time(tstart):
     return "%d:%02d:%02d" % (h, m, s)
 
 
-def run_parallel(args, call, gpus=None, threads=1, concurr_key='concurr'):
+def run_progress(callable_func, items, message=None, jobs=1):
+
+    results = []
+
+    print 'Starting pool of %d jobs' % jobs
+
+    pool = multiprocessing.Pool(processes=jobs)
+    for item in items:
+        pool.apply_async(callable_func, args=(item,), callback=results.append)
+
+    current = 0
+    total = len(items)
+
+    while current < total:
+        current = len(results)
+        if message is not None:
+            args = {'current': current, 'total': total}
+            sys.stdout.write("\r" + message.format(**args))
+            sys.stdout.flush()
+        time.sleep(0.5)
+
+    pool.close()
+    pool.join()
+
+    return results
+
+
+def run_parallel(call, args, gpus=None, threads=1, concurr_key='concurr'):
 
     # Do not pool if you don't have enough concurr
     # Keep it low
@@ -91,50 +120,67 @@ def run_parallel(args, call, gpus=None, threads=1, concurr_key='concurr'):
 
     configs = []
     for concurr in args[concurr_key]:
-
         args_config = compute_config(args, {concurr_key: str(concurr)})
-
-        if q.qsize() > 0:
+        if len(gpus) > 0 and q.qsize() > 0:
             args_config[concurr_key + '_queue'] = q
         configs.append(args_config)
 
     # If you are not multithreading, run it as our ancestors did
     if threads == 1:
+        results = []
         for config in configs:
-            call(config)
+            results.append(call(config))
 
     # Or allocate a pool for multithreading
     else:
         pool = multiprocessing.Pool(processes=threads)
-        pool.map(call, configs)
+        results = pool.map(call, configs)
         pool.close()
         pool.join()
 
-
-def run_progress(callable_func, items, message=None, jobs=1):
-
-    results = []
-
-    pool = multiprocessing.Pool(processes=jobs)
-    for item in items:
-        pool.apply_async(callable_func, args=(item,), callback=results.append)
-
-    pool.close()
-    pool.join()
-
-    current = 0
-    total = len(items)
-
-    while current < total:
-        current = len(results)
-        if message is not None:
-            args = {'current': current, 'total': total}
-            sys.stdout.write("\r" + message.format(**args))
-            sys.stdout.flush()
-        time.sleep(0.5)
-
     return results
 
+
+def parallel_theano(params, execute, concurr_key='concurr'):
+
+    if concurr_key + '_queue' in params:
+        q = params[concurr_key + '_queue']
+        gpu = q.get(True)
+        os.environ['THEANO_FLAGS'] = "device=" + gpu
+    else:
+        os.environ['THEANO_FLAGS'] = "device=cpu"
+
+    os.environ['THEANO_FLAGS'] = os.environ['THEANO_FLAGS'] + "," + \
+        "floatX=float32," + \
+        "nvcc.fastmath=True," + \
+        "base_compiledir=/tmp/theano/" + str(os.getpid())
+
+    import theano
+
+    result = execute(params)
+
+    if concurr_key + '_queue' in params:
+        q.put(gpu)
+
+    return result
+
+
+def executed_experiments(pipeline, config):
+    path = os.path.join(root(), 'experiments', pipeline + '.' + config)
+    experiments = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+    return experiments
+
+
+def root():
+    return os.path.dirname(os.path.realpath(__file__))
+
+
+def cvize(filename, fold, filetype=None):
+    name, extension = os.path.splitext(filename)
+    cv = name + '_cv_' + str(fold)
+    if filetype is not None:
+        cv = cv + '_' + filetype
+    return cv + extension
 
 if __name__ == "__main__":
 
