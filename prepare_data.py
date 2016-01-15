@@ -1,25 +1,25 @@
 #!/usr/bin/env python
 import os
+import random
 import numpy as np
 import numpy.ma as ma
-import nibabel as nb
 import pandas as pd
 import urllib
 import urllib2
 import hashlib
 from functools import partial
 from sklearn import preprocessing
-from sklearn import cross_validation
 from utils import *
 
 
-class HeadRequest(urllib2.Request):
-    def get_method(self):
-        return "HEAD"
+def download_derivative(url_path, download_file):
 
+    class HeadRequest(urllib2.Request):
+        def get_method(self):
+            return "HEAD"
 
-def download_data(url_path, download_file):
     print time.strftime("%H:%M:%S"), download_file, ':',
+
     if os.path.exists(download_file):
         fhash = hashlib.md5(open(download_file, 'rb').read()).hexdigest()
         try:
@@ -44,15 +44,6 @@ def download_data(url_path, download_file):
     return download_file
 
 
-def compute_parcellations(functional, mask):
-    mask_vals = np.unique(mask)
-    mask_vals = np.array([i for i in mask_vals if i > 0])
-    avg_ts = np.zeros((mask_vals.shape[0], functional.shape[1]))
-    for i, r in enumerate(mask_vals):
-        avg_ts[i, :] = np.mean(functional[np.where(mask == r)[0], :], 0)
-    return avg_ts
-
-
 def compute_connectivity(functional):
     with np.errstate(invalid='ignore'):
         corr = np.nan_to_num(np.corrcoef(functional))
@@ -61,139 +52,145 @@ def compute_connectivity(functional):
         return ma.masked_where(m, corr).compressed()
 
 
-def load_patient(subj, tmpl, mask):
-    if tmpl[-2:] == '1D':
-        df = pd.DataFrame.from_csv(tmpl % subj, sep="\t")
-        functional = df.as_matrix().T
-        functional = preprocessing.scale(functional, axis=1)
-    else:
-        functional = nb.load(tmpl % subj).get_data()
-        voxels = np.prod(functional.shape[0:3])
-        flatten_shape = (voxels, np.prod(functional.shape[3:]))
-        functional = np.reshape(functional, flatten_shape)
-        if mask is not None:
-            functional = compute_parcellations(functional, mask)
+def load_patient(subj, tmpl):
+    df = pd.read_csv(format_config(tmpl, {
+        'subject': subj,
+    }), sep="\t")
+    ROIs = ['#' + str(y) for y in sorted([int(x[1:]) for x in df.keys().tolist()])]
+    functional = df[ROIs].as_matrix().T
+    functional = preprocessing.scale(functional, axis=1)
     functional = compute_connectivity(functional)
+    functional = functional.astype(np.float32)
     return subj, functional.tolist()
 
 
-def load_patients(subjs, mask, tmpl, jobs=10):
-
-    if mask is not None:
-        mask = nb.load(mask)
-        mask = np.reshape(mask.get_data(), np.prod(mask.shape[0:3]))
-
-    partial_load_patient = partial(load_patient, tmpl=tmpl, mask=mask)
+def load_patients(subjs, tmpl, jobs=10):
+    partial_load_patient = partial(load_patient, tmpl=tmpl)
     msg = 'Done {current} of {total}'
-    return run_progress(partial_load_patient, subjs, message=msg, jobs=jobs)
+    return dict(run_progress(partial_load_patient, subjs, message=msg, jobs=jobs))
 
-def prepare_data(phenotypes_file, tmpl, destination, mask=None):
-    """TODO Fill in with a description"""
 
-    phenotypes = load_phenotypes(phenotypes_file)
-    keys = phenotypes.index.get_values()
-    results = load_patients(keys, mask=mask, tmpl=tmpl)
+def prepare_data(pheno, fold_idxs, derivatives_data, output):
 
-    name, ext = os.path.splitext(destination)
+    name, ext = os.path.splitext(output)
+
+    for fold, data in enumerate(fold_idxs):
+
+        print 'fold ' + str(fold+1) + ':',
+
+        for datatype in data:
+
+            features = []
+            classes = []
+            ids = []
+
+            for pid in data[datatype]:
+                features.append(derivatives_data[pid])
+                classes.append(pheno[pheno['FILE_ID'] == pid]['DX_GROUP'][0])
+                ids.append(pid)
+
+            features = np.array(features).astype(np.float32)
+            classes = np.array(classes).astype(int)
+            final = np.insert(features, 0, classes, axis=1)
+
+            typename = format_config(name, {
+                'fold': str(fold+1),
+                'datatype': datatype,
+            })
+
+            np.savetxt(typename + ext, final, delimiter=',')
+            np.savetxt(typename + '.ids' + ext, ids, delimiter=',', fmt="%s")
+
+            print datatype,
+
+        print
+
+
+def full_data(pheno, derivatives_data, output):
+
+    name, ext = os.path.splitext(output)
 
     features = []
-    ids = []
     classes = []
-    phenos = []
+    ids = []
 
-    for pid, feats in results:
-        pdata = phenotypes[phenotypes['FILE_ID'] == pid].iloc[0,:].tolist()
-        features.append(feats)
+    for pid in derivatives_data:
+        features.append(derivatives_data[pid])
+        classes.append(pheno[pheno['FILE_ID'] == pid]['DX_GROUP'][0])
         ids.append(pid)
-        classes.append(phenotypes[phenotypes['FILE_ID'] == pid]['DX_GROUP'])
-        phenos.append(pdata)
 
     features = np.array(features).astype(np.float32)
-    classes = np.array(classes)
-
+    classes = np.array(classes).astype(int)
     final = np.insert(features, 0, classes, axis=1)
-    np.savetxt(name + ext, final, delimiter=',')
-    np.savetxt(name + '.pheno' + ext, phenos, delimiter=',', fmt="%s")
 
-    scaled = preprocessing.scale(features)
+    np.savetxt(output, final, delimiter=',')
+    np.savetxt(name + '.ids' + ext, ids, delimiter=',', fmt="%s")
 
-    final = np.insert(scaled, 0, classes, axis=1)
-    np.savetxt(name + '-norm' + ext, final, delimiter=',')
-    np.savetxt(name + '-norm.pheno' + ext, phenos, delimiter=',', fmt="%s")
-
-
-def prepare_data_cv(filename, folds, seed=42, pheno_file=True):
-    name, ext = os.path.splitext(filename)
-    data = np.loadtxt(filename, delimiter=',')
-
-    if pheno_file:
-        pfile = name + '.pheno' + ext
-        pheno = np.genfromtxt(pfile, delimiter=',', dtype=np.str)
-
-    cv = cross_validation.StratifiedKFold(y=data[:, 0], n_folds=folds,
-                                          shuffle=True, random_state=seed)
-
-    for fold, (train_index, test_index) in enumerate(cv):
-        fold = str(fold + 1)
-
-        np.savetxt(name + '_cv_' + fold + '_train' + ext,
-                   data[train_index], delimiter=',')
-
-        np.savetxt(name + '_cv_' + fold + '_test' + ext,
-                   data[test_index], delimiter=',')
-
-        if pheno_file:
-            np.savetxt(name + '_cv_' + fold + '_train.pheno' +
-                       ext, pheno[train_index], delimiter=',', fmt="%s")
-            np.savetxt(name + '_cv_' + fold + '_test.pheno' +
-                       ext, pheno[test_index], delimiter=',', fmt="%s")
-
-        print filename, fold
 
 if __name__ == "__main__":
 
-    seed = 42
-    folds = 10
-    download_it = True
+    SEED = 19
+    FOLDS = 10
+    download_it = False
 
     pheno_path = './data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv'
     pheno = load_phenotypes(pheno_path)
 
+    random.seed(SEED)
+
+    fold_idxs = [{'train': [], 'valid': [], 'test': []} for i in range(FOLDS)]
+    groups = pheno.groupby(('SITE_ID', 'DX_GROUP'))
+    for group, data in groups:
+
+        n = len(data)
+        fold_sizes = (n // FOLDS) * np.ones(FOLDS, dtype=np.int)
+        fold_sizes[:n % FOLDS] += 1
+
+        random.shuffle(fold_sizes)
+
+        idxs = data['FILE_ID'].tolist()
+
+        current = 0
+        for fold, fold_size in enumerate(fold_sizes):
+            test = idxs[current:current+fold_size]
+            if current-fold_size < 0:
+                valid = idxs[current-fold_size:]
+            else:
+                valid = idxs[current-fold_size:current]
+            train = [idx for idx in idxs if idx not in test and idx not in valid]
+            fold_idxs[fold]['train'] = fold_idxs[fold]['train'] + train
+            fold_idxs[fold]['valid'] = fold_idxs[fold]['valid'] + valid
+            fold_idxs[fold]['test'] = fold_idxs[fold]['test'] + test
+            current = current + fold_size
+
     s3_prefix = 'https://s3.amazonaws.com/fcp-indi/data/Projects/ABIDE_Initiative/Outputs/'
+    download_root = './data/functionals'
+    derivatives = ['cpac/filt_global/rois_cc200/{subject}_rois_cc200.1D']
 
-    if download_it:
-
-        download_root = './data/functionals'
-
-        derivatives = [
-            'cpac/filt_global/func_preproc/{}_func_preproc.nii.gz',
-            'cpac/filt_global/rois_cc200/{}_rois_cc200.1D',
-        ]
-
-        file_ids = pheno['FILE_ID'].tolist()
-
-        for derivative in derivatives:
+    file_ids = pheno['FILE_ID'].tolist()
+    for derivative in derivatives:
+        if download_it:
             for file_id in file_ids:
-
-                file_path = derivative.format(file_id)
-
+                file_path = format_config(derivative, {'subject': file_id})
                 url_path = s3_prefix + file_path
-                download_file = os.path.join(download_root, file_path)
+                output_file = os.path.join(download_root, file_path)
+                output_dir = os.path.dirname(output_file)
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                download_derivative(url_path, output_file)
 
-                download_dir = os.path.dirname(download_file)
-                if not os.path.exists(download_dir):
-                    os.makedirs(download_dir)
+        file_template = os.path.join(download_root, derivative)
 
-                download_data(url_path, download_file)
+        means = []
+        means_perclass = [[], []]
+        derivatives_data = load_patients(file_ids, tmpl=file_template)
+        for pid in derivatives_data:
+            m = np.mean(derivatives_data[pid])
+            means.append(m)
+            means_perclass[pheno[pheno['FILE_ID'] == pid]['DX_GROUP'][0]].append(m)
+        print np.mean(means), np.std(means)
+        print np.mean(means_perclass[0]), np.mean(means_perclass[1])
+        print np.std(means_perclass[0]), np.std(means_perclass[1])
 
-    # Our own pipeline (create our version of CC200)
-    tmpl = './data/functionals/cpac/filt_global/func_preproc/%s_func_preproc.nii.gz'
-    prepare_data(pheno_path, tmpl, './data/corr/corr.csv', mask='./data/masks/cc200.nii.gz') # Apply CC200 and create the connectivity matrix
-    prepare_data_cv('./data/corr/corr.csv', folds, seed=seed) # Create folds for training and cv
-    prepare_data_cv('./data/corr/corr-norm.csv', folds, seed=seed) # Scale data to mean 0 sd 1
-
-    # ABIDE's pipeline (their own CC200 parcellations)
-    tmpl = './data/functionals/cpac/filt_global/rois_cc200/%s_rois_cc200.1D'
-    prepare_data(pheno_path, tmpl, './data/corr/corr_1D.csv')
-    prepare_data_cv('./data/corr/corr_1D.csv', folds, seed=seed)
-    prepare_data_cv('./data/corr/corr_1D-norm.csv', folds, seed=seed)
+        prepare_data(pheno, fold_idxs, derivatives_data, output='./data/corr/corr_1D_cv_{fold}_{datatype}.csv')
+        full_data(pheno, derivatives_data, output='./data/corr/corr_1D.csv')

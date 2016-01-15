@@ -1,42 +1,32 @@
-import re, glob, string, csv, sys, random, math, time, os
+import os
 from tabulate import tabulate
 import argparse
-
 import numpy as np
-import nibabel as nb
-
-from sklearn import cross_validation
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score, classification_report
-from sklearn.grid_search import GridSearchCV
-from sklearn.pipeline import Pipeline
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.svm import SVC
+from sklearn.svm import (SVC, LinearSVC)
 from sklearn.metrics import confusion_matrix
-
-from multiprocessing import cpu_count
-from multiprocessing import Pool
-import matplotlib.pyplot as plt
 
 from utils import *
 
+
 def svm(X_train, y_train, X_test, y_test):
 
-    clf = SVC(kernel='linear')
+    clf = LinearSVC(loss='squared_hinge', penalty='l1', dual=False)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
 
     [[TN, FP], [FN, TP]] = confusion_matrix(y_test, y_pred).astype(float)
-    accuracy = ( TP + TN ) / ( TP + TN + FP + FN )
-    specificity = TN / ( FP + TN )
-    precision = TP / ( TP + FP )
-    sensivity = recall = TP / ( TP + FN )
-    fscore = 2 * TP / ( 2 * TP + FP + FN )
+    accuracy = (TP + TN) / (TP + TN + FP + FN)
+    specificity = TN / (FP + TN)
+    precision = TP / (TP + FP)
+    sensivity = recall = TP / (TP + FN)
+    fscore = 2 * TP / (2 * TP + FP + FN)
 
-    return [accuracy, precision, recall, fscore, sensivity, specificity]
+    return [accuracy, precision, recall, fscore, sensivity, specificity], clf.coef_.flatten()
 
 if __name__ == "__main__":
 
     np.seterr(all="ignore")
+    np.set_printoptions(threshold=np.nan)
 
     parser = argparse.ArgumentParser(description="SVM CV train and test")
     parser.add_argument("cv_folds", type=nrangearg, help="CV Folds")
@@ -45,26 +35,50 @@ if __name__ == "__main__":
     parser.add_argument("--latex", action="store_true")
     args = parser.parse_args()
 
+    folder = './experiments/svm/analysis'
+    if not os.path.isdir(folder):
+        os.makedirs(folder)
+
+    all_coefs = []
     metrics = []
     for fold in args.cv_folds:
 
         name, extension = os.path.splitext(args.filename)
-        data_fold_train_path = ( name + "_cv_%(fold)s_train" + extension ) % {"fold": fold}
+        data_fold_train_path = (name + "_cv_%(fold)s_train" + extension) % {"fold": fold}
 
         data_train = np.loadtxt(data_fold_train_path, delimiter=",")
-        y_train = data_train[:,0]
-        X_train = data_train[:,1:]
+        y_train = data_train[:, 0]
+        X_train = data_train[:, 1:]
+
+        data_fold_valid_path = (name + "_cv_%(fold)s_valid" + extension) % {"fold": fold}
+
+        data_valid = np.loadtxt(data_fold_valid_path, delimiter=",")
+        y_valid = data_valid[:, 0]
+        X_valid = data_valid[:, 1:]
+
+        y_train = np.concatenate((y_valid, y_train))
+        X_train = np.concatenate((X_valid, X_train))
 
         name, extension = os.path.splitext(args.filename)
-        data_fold_test_path = ( name + "_cv_%(fold)s_test" + extension ) % {"fold": fold}
+        data_fold_test_path = (name + "_cv_%(fold)s_test" + extension) % {"fold": fold}
 
         data_test = np.loadtxt(data_fold_test_path, delimiter=",")
-        y_test = data_test[:,0]
-        X_test = data_test[:,1:]
+        y_test = data_test[:, 0]
+        X_test = data_test[:, 1:]
 
-        result = svm(X_train, y_train, X_test, y_test)
+        print X_train.shape, y_train.shape, X_test.shape, y_test.shape
 
+        result, coefs = svm(X_train, y_train, X_test, y_test)
+        np.savetxt(folder + '/coeffs_%s' % fold, coefs, delimiter=',')
+
+        all_coefs.append(coefs)
         metrics.append(result)
+
+        print 'Done fold %s' % fold
+
+    all_coefs = np.array(all_coefs)
+    mean_coefs = np.mean(all_coefs, axis=0)
+    np.savetxt(folder + '/coeffs_mean', mean_coefs, delimiter=',')
 
     if args.mean:
         metrics = [np.mean(metrics, axis=0)]

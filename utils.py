@@ -12,7 +12,7 @@ replacement_field = '{' + identifier + '}'
 def load_phenotypes(pheno_path):
     pheno = pd.read_csv(pheno_path)
     pheno = pheno[pheno['FILE_ID'] != 'no_filename']
-    pheno['DX_GROUP'] = pheno['DX_GROUP'].apply(lambda v: str(int(v)-1))
+    pheno['DX_GROUP'] = pheno['DX_GROUP'].apply(lambda v: int(v)-1)
     pheno['SITE_ID'] = pheno['SITE_ID'].apply(lambda v: re.sub('_[0-9]', '', v))
     pheno.index = pheno['FILE_ID']
     return pheno[['FILE_ID', 'DX_GROUP', 'SEX', 'SITE_ID']]
@@ -83,24 +83,37 @@ def run_progress(callable_func, items, message=None, jobs=1):
 
     print 'Starting pool of %d jobs' % jobs
 
-    pool = multiprocessing.Pool(processes=jobs)
-    for item in items:
-        pool.apply_async(callable_func, args=(item,), callback=results.append)
-
     current = 0
     total = len(items)
 
-    while current < total:
-        current = len(results)
-        if message is not None:
-            args = {'current': current, 'total': total}
-            sys.stdout.write("\r" + message.format(**args))
-            sys.stdout.flush()
-        time.sleep(0.5)
+    if jobs == 1:
+        results = []
+        for item in items:
+            results.append(callable_func(item))
+            current = len(results)
+            if message is not None:
+                args = {'current': current, 'total': total}
+                sys.stdout.write("\r" + message.format(**args))
+                sys.stdout.flush()
 
-    pool.close()
-    pool.join()
+    # Or allocate a pool for multithreading
+    else:
+        pool = multiprocessing.Pool(processes=jobs)
+        for item in items:
+            pool.apply_async(callable_func, args=(item,), callback=results.append)
 
+        while current < total:
+            current = len(results)
+            if message is not None:
+                args = {'current': current, 'total': total}
+                sys.stdout.write("\r" + message.format(**args))
+                sys.stdout.flush()
+            time.sleep(0.5)
+
+        pool.close()
+        pool.join()
+
+    print
     return results
 
 
@@ -186,9 +199,6 @@ if __name__ == "__main__":
 
     # print gpurangearg('gpu0,gpu1,gpu2')
     # print gpurangearg('1-7')
-    # print load_phenotypes('./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv')
-
-
-    config = { 'run': '1448904237', 'data_transform': '/home/anibal.heinsfeld/repos/acerta-abide/experiments/grbm.original/{run}/models/grbm.original.grbm-3_cv_1.pkl'}
-
-    print compute_config(config)['data_transform']
+    phenos = load_phenotypes('./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv')
+    print phenos.loc[['Caltech_0051483','SBL_0051580']].to_records(index=False)
+    print phenos[phenos['FILE_ID']=='Caltech_0051483'].to_records(index=False)[0]

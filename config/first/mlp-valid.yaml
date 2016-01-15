@@ -1,11 +1,9 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:csv_dataset.CSVDataset {
-        path: '{data_source}',
+        path: '{train_data_source}',
         expect_headers: False,
         expect_labels: True,
-        start: {data_train_start},
-        stop: {data_train_stop},
     },
 
     model: !obj:pylearn2.models.mlp.MLP {
@@ -22,65 +20,69 @@
             },
             !obj:pylearn2.models.mlp.Softmax {
                 max_col_norm: 3.0,
-                # max_col_norm: 1.9365,
                 layer_name: 'y',
                 n_classes: 2,
-                irange: .005,
+                irange: 0.05,
             },
         ],
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate: .0045,
+        learning_rate: .0005,
         learning_rule: !obj:pylearn2.training_algorithms.learning_rule.Momentum {
-            init_momentum: .5,
+            init_momentum: .1,
         },
+        train_iteration_mode: even_shuffled_sequential,
+        monitor_iteration_mode: even_shuffled_sequential,
+        #even_sequential, even_shuffled_sequential or even_batchwise_shuffled_sequential
         monitoring_dataset: {
             'train': *train,
             'valid': !obj:csv_dataset.CSVDataset {
-                path: '{data_source}',
+                path: '{valid_data_source}',
                 expect_headers: False,
                 expect_labels: True,
-                start: {data_valid_start},
-                stop: {data_valid_stop},
             },
             'test': !obj:csv_dataset.CSVDataset {
                 path: '{test_data_source}',
                 expect_headers: False,
                 expect_labels: True,
-                start: 0,
-                stop: 100,
             },
         },
         cost: !obj:pylearn2.costs.mlp.dropout.Dropout {
             input_include_probs: {
-                'h1': .6,
-                'h2': .4,
+                'h1': 0.6,
+                'h2': 0.8,
             },
             input_scales: {
-                'h1': 1.,
-                'h2': 1.,
-            }
+                'h1': 1.66,
+                'h2': 1.25,
+            },
+            per_example: True,
         },
         # cost: !obj:pylearn2.costs.mlp.Default {},
         termination_criterion: !obj:pylearn2.termination_criteria.EpochCounter {
             max_epochs: {layer_max_epochs},
         },
-        update_callbacks: !obj:pylearn2.training_algorithms.sgd.ExponentialDecay {
-            decay_factor: 1.0001,
-            min_lr: .000001,
-        },
+        # update_callbacks: !obj:pylearn2.training_algorithms.sgd.LinearDecay {
+        #     start: 1,
+        #     saturate: {layer_max_epochs},
+        #     decay_factor: .01,
+        # },
     },
 
     extensions: [
+        !obj:pylearn2.train_extensions.roc_auc.RocAucChannel {
+            positive_class_index: 0,
+            negative_class_index: 1,
+        },
         !obj:pylearn2.training_algorithms.learning_rule.MomentumAdjustor {
             start: 1,
             saturate: {layer_max_epochs},
-            final_momentum: .7,
+            final_momentum: .9,
         },
         !obj:best_params.MonitorBasedSaveBest {
-             channel_name: "valid_y_misclass",
-             save_path: "{save_path}",
+            channel_name: "valid_y_misclass",
+            save_path: "{save_path}",
         },
         !obj:csv_monitoring.CSVMonitoring {
             name: "{namespace}.{step}.cv_{fold}",

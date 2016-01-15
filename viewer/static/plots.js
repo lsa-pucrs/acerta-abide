@@ -1,3 +1,10 @@
+function unique(arr){
+    var o = {}, i, l = arr.length, r = [];
+    for(i=0; i<l;i+=1) o[arr[i]] = arr[i];
+    for(i in o) r.push(o[i]);
+    return r;
+};
+
 function populate(data){
     for(var filter in data){
         $('#' + filter).empty();
@@ -7,6 +14,11 @@ function populate(data){
                 var ar = a.split("").reverse().join("");
                 var br = b.split("").reverse().join("");
                 return ar.localeCompare(br);
+            });
+        }
+        if(filter == 'cv'){
+            qfilter.sort(function(a, b){
+                return parseInt(a) > parseInt(b);
             });
         }
         for(var i in qfilter){
@@ -31,8 +43,14 @@ function namespace(){
 }
 
 function update(query){
-    $.getJSON('experiments/' + namespace() + '/summary/' + JSON.stringify(query), function(data){
+    $('#filter select').prop('disabled', true);
+    if(window.experiment_req != undefined){
+        window.experiment_req.abort();
+    }
+    window.experiment_req = $.getJSON('experiments/' + namespace() + '/summary/' + JSON.stringify(query), function(data){
         populate(data);
+        $('#filter select').prop('disabled', false);
+        window.experiment_req = undefined;
     });
 }
 
@@ -45,52 +63,124 @@ $(document).ready(function(){
         update(query());
     });
     $('#filter button').click(function(){
-        d3.json('experiments/' + namespace() + '/' + JSON.stringify(query()), function(error, json) {
+        var average = $('#mean').prop("checked");
+        d3.json('experiments/' + namespace() + '/' + JSON.stringify(query()) + (average ? '?average' : ''), function(error, json) {
           if (error) throw error;
           var data = json['data'];
-          render(data);
+          render(data, average);
         });
     });
     $('#draw').highcharts({
         chart: { zoomType: 'x' },
         xAxis: { type: 'category' },
         title: false,
-        legend: {
-            enabled: true
-        },
-        plotOptions: {
-            series: {
-                marker: {
-                    enabled: false
-                }
-            }
-        }
+        tooltip: { crosshairs: true, shared: true, },
+        legend: { enabled: true },
+        plotOptions: { series: { marker: { enabled: false } } }
     });
 });
 
-function render(data){
+function name(pipeline, config, experiment, model, fold, channel, i){
+    var name = '';
+    if(unique(pipeline).length > 1)
+        name += 'Pipe: ' + pipeline[i];
+    if(unique(config).length > 1)
+        name += 'C: ' + config[i];
+    if(unique(experiment).length > 1)
+        name += 'Exp: ' + experiment[i];
+    if(unique(model).length > 1)
+        name += 'Model: ' + model[i];
+    if(unique(fold).length > 1)
+        name += 'Fold: ' + fold[i];
+    if(unique(channel).length > 1)
+        name += 'C: ' + channel[i];
+    return name;
+}
 
-    series = [];
+function prepareSeries(data, average){
+    var series = [];
+
+    var pipeline = [];
+    var config = [];
+    var experiment = [];
+    var model = [];
+    var fold = [];
+    var channel = [];
+
     for(var d in data){
-        var s = data[d];
-
-        var f = {
-            type: 'line',
-            name: s.name,
-            data: [],
-        };
-
-        for(var v in s.values){
-            var point = s.values[v];
-            f['data'].push([
-                point.epoch,
-                point.value,
-            ]);
-        }
-
-        series.push(f);
-
+        var s = data[d].name.split('.');
+        pipeline.push(s[0]);
+        config.push(s[1]);
+        experiment.push(s[2]);
+        model.push(s[3]);
+        fold.push(s[4]);
+        channel.push(s[5]);
     }
+
+    if(average){
+        for(var d in data){
+            var s = data[d];
+            console.log(s)
+            var fmean = {
+                zIndex: 1,
+                type: 'line',
+                name: name(pipeline, config, experiment, model, fold, channel, parseInt(d)),
+                data: [],
+                marker: {
+                    lineWidth: 2,
+                    lineColor: Highcharts.getOptions().colors[parseInt(d)]
+                }
+            };
+            var frange = {
+                zIndex: 0,
+                type: 'arearange',
+                lineWidth: 0,
+                linkedTo: ':previous',
+                name: name(pipeline, config, experiment, model, fold, channel, parseInt(d)),
+                data: [],
+                color: Highcharts.getOptions().colors[parseInt(d)],
+                fillOpacity: 0.3,
+            };
+            for(var v in s.range){
+                var point = s.mean[v];
+                fmean['data'].push([
+                    point.epoch,
+                    point.mean,
+                ]);
+                var point = s.range[v];
+                frange['data'].push([
+                    point.epoch,
+                    point.min,
+                    point.max,
+                ]);
+            }
+            series.push(fmean);
+            series.push(frange);
+        }
+    } else {
+        for(var d in data){
+            var s = data[d];
+            var f = {
+                type: 'line',
+                name: name(pipeline, config, experiment, model, fold, channel, parseInt(d)),
+                data: [],
+            };
+            for(var v in s.values){
+                var point = s.values[v];
+                f['data'].push([
+                    point.epoch,
+                    point.value,
+                ]);
+            }
+            series.push(f);
+        }
+    }
+    return series;
+}
+
+function render(data, average){
+
+    var series = prepareSeries(data, average);
 
     function remove(arr, obj){
         var found = arr.indexOf(obj);
@@ -119,8 +209,6 @@ function render(data){
             }
         }
     }
-    console.log(to_add)
-    console.log(to_remove);
     for(var i in to_remove){
         for(var j in h.series){
             var s = h.series[j];

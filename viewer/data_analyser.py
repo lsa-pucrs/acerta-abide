@@ -9,16 +9,14 @@ from os.path import isdir, join
 from os import listdir
 from utils import *
 
-
-def extract_pheno():
-    f = root() + '/data/corr/corr_1D_cv_%d_%s.pheno.csv'
-    dfs = []
-    for fold in range(1, 11):
-        for t in ['train', 'test']:
-            pheno_file = f % (fold, t)
-            pheno = np.loadtxt(pheno_file, delimiter=',', dtype=str)
-            df = pd.DataFrame(pheno, columns=['pid', 'class', 'sex', 'institute'])
-            df['fold'] = fold
-            df['type'] = t
-            dfs.append(df)
-    return pd.concat(dfs)
+def extract_pheno(fold):
+    f = root() + '/data/corr/corr_1D_cv_%d_%s.ids.csv'
+    counts = {}
+    institutes = []
+    for t in ['train', 'valid', 'test']:
+        pheno_file = f % (fold, t)
+        ids = np.loadtxt(pheno_file, delimiter=',', dtype=str).flatten().tolist()
+        ints = [ i.split('_')[0] for i in ids ]
+        counts[t] = { ins: ints.count(ins) for ins in set(ints) }
+        institutes = institutes + ints
+    return counts, list(set(institutes))

@@ -1,17 +1,15 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:csv_dataset.CSVDataset {
-        path: '{data_source}',
+        path: '{train_data_source}',
         expect_headers: False,
         expect_labels: True,
-        start: {data_train_start},
-        stop: {data_train_stop}
     },
 
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
         nvis: {layer_in},
         nhid: {layer_out},
-        irange: 0.05,
+        irange: 0.01702471939,
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
             corruption_level: {corruption},
         },
@@ -20,35 +18,49 @@
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : 1e-3,
+        learning_rate : 0.0001,
         batch_size : {layer_batch},
         monitoring_dataset: {
             'train': *train,
             'valid': !obj:csv_dataset.CSVDataset {
-                path: '{data_source}',
+                path: '{valid_data_source}',
                 expect_headers: False,
                 expect_labels: True,
-                start: {data_valid_start},
-                stop: {data_valid_stop},
             },
             'test': !obj:csv_dataset.CSVDataset {
                 path: '{test_data_source}',
                 expect_headers: False,
                 expect_labels: True,
-                start: 0,
-                stop: 100,
             },
         },
-        cost: !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
+        cost: !obj:pylearn2.costs.cost.SumOfCosts {
+            costs: [
+              !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {
+              },
+              !obj:pylearn2.costs.autoencoder.SparseActivation {
+                  coeff: 0.5,
+                  p: 0.2,
+              },
+            ],
+        },
         termination_criterion: !obj:pylearn2.termination_criteria.EpochCounter {
             max_epochs: {layer_max_epochs},
         }
     },
 
     extensions: [
+        # !obj:pylearn2.training_algorithms.sgd.MonitorBasedLRAdjuster {
+        #     high_trigger: 1.001,
+        #     low_trigger: 0.999,
+        #     shrink_amt: 0.8,
+        #     grow_amt: 1.2,
+        #     min_lr: 0.00001,
+        #     max_lr: 1.0,
+        #     dataset_name: 'train'
+        # },
         !obj:best_params.MonitorBasedSaveBest {
-             channel_name: "valid_objective",
-             save_path: "{save_path}",
+            channel_name: "valid_objective",
+            save_path: "{save_path}",
         },
         !obj:csv_monitoring.CSVMonitoring {
             name: "{namespace}.{step}.cv_{fold}",
