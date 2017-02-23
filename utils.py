@@ -163,6 +163,8 @@ def parallel_theano(params, execute, concurr_key='concurr'):
     else:
         os.environ['THEANO_FLAGS'] = "device=cpu"
 
+    # device=cpu,floatX=float32,nvcc.fastmath=True,base_compiledir=/tmp/theano/20
+
     os.environ['THEANO_FLAGS'] = os.environ['THEANO_FLAGS'] + "," + \
         "floatX=float32," + \
         "nvcc.fastmath=True," + \

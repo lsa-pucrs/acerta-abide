@@ -1,5 +1,5 @@
 import numpy as np
-import csv
+import pandas as pd
 import sys
 import argparse
 import re
@@ -7,43 +7,42 @@ from tabulate import tabulate
 
 def analyse_phenotype(phenotype_filename):
 
-    phenotypes = []
-    with open(phenotype_filename, 'rb') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            subj = row['FILE_ID']
-            if subj == 'no_filename':
-                continue
-            if row['DX_GROUP'] not in ['1', '2']:
-                continue
-            if row['SEX'] not in ['1', '2']:
-                continue
-            phenotypes.append([ subj, row['DX_GROUP'], row['SEX'], re.sub('_[0-9]', '', row['SITE_ID']) ])
-    phenotypes = np.array(phenotypes)
+    pheno = pd.read_csv(phenotype_filename)
+    pheno = pheno[pheno['FILE_ID'] != 'no_filename']
+    pheno['SITE_ID'] = pheno['SITE_ID'].apply(lambda v: re.sub('_[0-9]', '', v))
 
-    institutesset = set([ re.sub('_[0-9]', '', x) for x in set(phenotypes[:,3]) ])
+    sex_fmt = '%d (M %d, F %d)'
 
-    male = ( phenotypes[:,2] == '1' )
-    female = ( phenotypes[:,2] == '2' )
-    results = { x: [
-        len(np.where( ( phenotypes[:,3] == x ) )[0]),
-        len(np.where( ( phenotypes[:,3] == x ) & male )[0]),
-        len(np.where( ( phenotypes[:,3] == x ) & female )[0]),
-    ] for x in institutesset }
+    data = []
+    for group, examples in pheno.groupby('SITE_ID'):
+        asd = examples['DX_GROUP'] == 1
+        tc = examples['DX_GROUP'] == 2
+        asd_age = examples[asd]['AGE_AT_SCAN'].mean()
+        asd_sex = examples[asd]['SEX'].value_counts().to_dict() # int index
+        tc_age = examples[tc]['AGE_AT_SCAN'].mean()
+        tc_sex = examples[tc]['SEX'].value_counts().to_dict() # int index
 
-    results = [ [x]+results[x] for x in results ]
-    results.append(['Mean',
-        str(int(np.mean( [ len(np.where( ( phenotypes[:,3] == x ) )[0]) for x in institutesset ] ))),
-        str(int(np.mean( [ len(np.where( ( phenotypes[:,3] == x ) & male )[0]) for x in institutesset ] ))),
-        str(int(np.mean( [ len(np.where( ( phenotypes[:,3] == x ) & female )[0]) for x in institutesset ] )))
-    ])
-    results.append([len(institutesset),
-        str(len(phenotypes)),
-        str(len(np.where(male)[0])),
-        str(len(np.where(female)[0]))
-    ])
+        if 1 not in asd_sex:
+            asd_sex[1] = 0
+        if 2 not in asd_sex:
+            asd_sex[2] = 0
+        if 1 not in tc_sex:
+            tc_sex[1] = 0
+        if 2 not in tc_sex:
+            tc_sex[2] = 0
 
-    print tabulate(results, headers=['Total', 'Male', 'Female'], tablefmt='grid')
+        data.append([group, asd_age, sex_fmt % (asd_sex[1] + asd_sex[2], asd_sex[1], asd_sex[2]), tc_age, sex_fmt % (tc_sex[1] + tc_sex[2], tc_sex[1], tc_sex[2])])
+
+    asd = pheno['DX_GROUP'] == 1
+    tc = pheno['DX_GROUP'] == 2
+    asd_age = pheno[asd]['AGE_AT_SCAN'].mean()
+    asd_sex = pheno[asd]['SEX'].value_counts().to_dict()
+    tc_age = pheno[tc]['AGE_AT_SCAN'].mean()
+    tc_sex = pheno[tc]['SEX'].value_counts().to_dict()
+
+    data.append(["All", asd_age, sex_fmt % (asd_sex[1] + asd_sex[2], asd_sex[1], asd_sex[2]), tc_age, sex_fmt % (tc_sex[1] + tc_sex[2], tc_sex[1], tc_sex[2])])
+
+    print tabulate(data, headers=['Institute', 'ASD Age', 'ASD Count', 'TC Age', 'TC Count'], tablefmt='plain')
 
 if __name__ == "__main__":
 

@@ -1,34 +1,34 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:csv_dataset.CSVDataset {
-        path: '{train_data_source}',
+        path: "/home/anibal.heinsfeld/repos/acerta-abide/data/corr/corr_train_{site}.csv",
         expect_headers: False,
         expect_labels: True,
     },
 
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
-        nvis: {layer_in},
-        nhid: {layer_out},
-        irange: {irange},
+        nvis: 19900,
+        nhid: 1000,
+        irange: 0.01702471939,
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
-            corruption_level: {corruption},
+            corruption_level: 0.7,
         },
-        act_enc: {layer_enc},
-        act_dec: {layer_dec},
+        act_enc: tanh,
+        act_dec: null,
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
         learning_rate : 0.0001,
-        batch_size : {layer_batch},
+        batch_size : 100,
         monitoring_dataset: {
-            'train': *train,
-            'valid': !obj:csv_dataset.CSVDataset {
-                path: '{valid_data_source}',
+            "train": *train,
+            "valid": !obj:csv_dataset.CSVDataset {
+                path: "//home/anibal.heinsfeld/repos/acerta-abide/data/corr/corr_valid_{site}.csv",
                 expect_headers: False,
                 expect_labels: True,
             },
-            'test': !obj:csv_dataset.CSVDataset {
-                path: '{test_data_source}',
+            "test": !obj:csv_dataset.CSVDataset {
+                path: "/home/anibal.heinsfeld/repos/acerta-abide/data/corr/corr_test_{site}.csv",
                 expect_headers: False,
                 expect_labels: True,
             },
@@ -44,18 +44,18 @@
             ],
         },
         termination_criterion: !obj:pylearn2.termination_criteria.EpochCounter {
-            max_epochs: {layer_max_epochs},
+            max_epochs: 8000,
         }
     },
 
     extensions: [
         !obj:best_params.MonitorBasedSaveBest {
             channel_name: "valid_objective",
-            save_path: "{save_path}",
+            save_path: "/home/anibal.heinsfeld/repos/acerta-abide/data/models/first.valid.pre-autoencoder-1-valid.{site}.pkl",
         },
         !obj:csv_monitoring.CSVMonitoring {
-            name: "{namespace}.{step}.cv_{fold}",
-            file: {log_file}
+            name: "first.valid.pre-autoencoder-1-valid.{site}",
+            file: "/home/anibal.heinsfeld/repos/acerta-abide/data/models/first.valid.pre-autoencoder-1-valid.{site}.csv",
         },
     ],
 

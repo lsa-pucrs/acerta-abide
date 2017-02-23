@@ -372,7 +372,7 @@ function init_buttons(){
     });
 
   });
-  $('#folds .btn-group button').filter(function(){ return $(this).val() == '1'; }).click();
+  $('#folds .btn-group button').filter(function(){ return $(this).val() == 'mean'; }).click();
 }
 
 function plot_distribution(connection){

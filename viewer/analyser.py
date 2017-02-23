@@ -14,6 +14,8 @@ from utils import *
 def filter(data, query):
     for key in query:
         val = query[key]
+        if val == None:
+            continue
         if isinstance(val, list):
             data = data[data[key].isin(val)]
         else:
@@ -21,17 +23,21 @@ def filter(data, query):
     return data
 
 
-def extract(pipeline, config):
+def extract(pipeline, config, experiment=[], model=[]):
     logs = glob.glob(join(root(), 'experiments', pipeline + '.' + config, '*', 'logs', '*'))
     logs_table = []
     for log in logs:
-        experiment, _ , name = log.split('/')[-3:]
-        model, cv = name.split('.')[2:4]
+        experiment_name, _ , name = log.split('/')[-3:]
+        if len(experiment) > 0 and experiment_name not in experiment:
+            continue
+        model_name, cv = name.split('.')[2:4]
+        if len(model) > 0 and model_name not in model:
+            continue
         cv = cv[3:]
         with open(log, 'rb') as csvfile:
             reader = csv.reader(csvfile, delimiter=',')
             for row in reader:
-                logs_table.append([pipeline, config, model, experiment, cv] + row)
+                logs_table.append([pipeline, config, model_name, experiment_name, cv] + row)
     df = pd.DataFrame(logs_table, columns=['pipeline', 'config', 'model', 'experiment', 'cv', 'channel', 'epoch', 'value'])
 
     df['value'] = df['value'].astype(float)

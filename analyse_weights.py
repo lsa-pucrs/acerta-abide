@@ -44,9 +44,9 @@ def extract_weights(pipeline, config, model, folds, experiments):
 
             del model_pkl
 
-            ae1 = ae1wft + ae1bft
-            ae2 = ae2wft + ae2bft
-            som = somw + somb
+            ae1 = ae1wft #+ ae1bft
+            ae2 = ae2wft # + ae2bft
+            som = somw  #+ somb
 
             g = scale(np.dot(np.dot(ae1, ae2), som).T, axis=1)
 

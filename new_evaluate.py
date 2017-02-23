@@ -53,15 +53,11 @@ def compute_metrics(model_path, test_path):
     return [accuracy, precision, recall, fscore, sensivity, specificity]
 
 
-def compute_metrics_config_train(config):
-    model_path = cvize(config['model_path'], config['fold'])
-    test_path = cvize(config['test_path'], config['fold'], filetype='train')
-    return [config['experiment'], config['fold']] + compute_metrics(model_path, test_path)
+def compute_metrics_config(config):
 
-
-def compute_metrics_config_test(config):
     model_path = cvize(config['model_path'], config['fold'])
-    test_path = cvize(config['test_path'], config['fold'], filetype='test')
+    test_path = config['test_path']
+
     return [config['experiment'], config['fold']] + compute_metrics(model_path, test_path)
 
 
@@ -80,10 +76,7 @@ def evaluate(config, gpus, threads):
             'model_path': os.path.join(root(), 'experiments', folder, exp, 'models', model_name),
         }, replace=False)
 
-        # theano_run = partial(parallel_theano, execute=compute_metrics_config_train, concurr_key='fold')
-        # results = results + run_parallel(theano_run, exp_config, gpus=gpus, threads=threads, concurr_key='fold')
-
-        theano_run = partial(parallel_theano, execute=compute_metrics_config_test, concurr_key='fold')
+        theano_run = partial(parallel_theano, execute=compute_metrics_config, concurr_key='fold')
         results = results + run_parallel(theano_run, exp_config, gpus=gpus, threads=threads, concurr_key='fold')
 
     print "%s: %s" % ("Total", elapsed_time(t0))

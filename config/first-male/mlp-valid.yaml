@@ -19,7 +19,7 @@
                 layer_content: !pkl: {data_transform_2},
             },
             !obj:pylearn2.models.mlp.Softmax {
-                max_col_norm: 2.0,
+                max_col_norm: 3.0,
                 layer_name: 'y',
                 n_classes: 2,
                 irange: 0.05,
@@ -28,9 +28,9 @@
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate: .00005,
+        learning_rate: .0005,
         learning_rule: !obj:pylearn2.training_algorithms.learning_rule.Momentum {
-            init_momentum: .5,
+            init_momentum: .1,
         },
         train_iteration_mode: even_shuffled_sequential,
         monitor_iteration_mode: even_shuffled_sequential,

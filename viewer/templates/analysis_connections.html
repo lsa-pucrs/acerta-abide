@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>ABIDE: Connectivity Analysis</title>
+    <meta charset="utf-8" />
+    <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet" type="text/css">
+    <style>
+
+      * { font-family: Lato; }
+
+      #content { text-align: center; }
+      label {display: block; float: right;}
+
+      svg * {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+
+      text.label {
+        font-weight:bold;
+        font-size:40px;
+        fill:#444;
+      }
+
+      .feature-group text,
+      .region-group text
+      {
+        font: 11px sans-serif;
+        pointer-events: none;
+      }
+
+      .feature-group path,
+      .region-group path
+      {
+        stroke: none;
+        fill-opacity: 0.7;
+      }
+
+      .region-group path {
+        fill-opacity: 0.5;
+      }
+
+
+      .feature-group path.active,
+      .region-group path.active {
+        stroke: #000;
+        stroke-opacity: 0.6;
+      }
+
+      path.chord {
+        stroke: none;
+        fill-opacity: .75;
+      }
+
+    </style>
+  </head>
+  <body>
+    <label> Parcel (type and press enter): <input type="text" id="parcel" size="4" /></label>
+    <h1>Deep Denoising Autoencoder - Feature relevance</h1>
+    <p>cc200 parcels grouped into MNI Structural regions. Outer circumference: regions, Inner circumference: parcels.
+    <strong>Darker</strong> parcels are more relevant for the classification.</p>
+    <p>Chords: correlations between inter-region parcels that are relevant for classification. Red: correlated, Blue: anti-correlated.</p>
+    <div id="content"></div>
+    <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js" charset="utf-8"></script>
+<script type="text/javascript">
+
+  var filter = [];
+  var threshold = 0.0;
+
+  var graphtype = function(query){
+
+    var width = 800,
+        height = 800,
+        outerRadius = Math.min(width, height) / 2 - 70,
+        innerRadius = outerRadius - 20,
+        colorIncrement = 0.07,
+        currentColorIncrement = 0,
+        currentregion = 0;
+
+    var svg = d3.select("#content")
+      .append("svg:svg")
+      .attr("id", "content_" + query["id"])
+      .attr("class", query['class'])
+      .attr("width", width)
+      .attr("height", height)
+      .append("svg:g")
+      .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+    svg.append("svg:text")
+      .style("text-anchor", "middle")
+      .text("Loading...");
+
+    $.getJSON('connections/data/' + JSON.stringify(query), function(json) {
+
+      svg.selectAll("text").remove();
+
+      var regions = json['regions'];
+      var data = json['parcels'];
+
+      var region_colors = d3.scale.category10();
+
+      var correlation_colors = d3.scale.linear().domain([json['means'][0], 0, json['means'][1]]).range(["blue", "white", "red"]);
+
+      var correlations = [], mean = [], feature = {};
+      for(var i = 0; i < data.length; i++) {
+        correlations[i] = [];
+        mean[i] = [];
+        feature[data[i].id] = i;
+        for (var j = 0; j < data.length; j++) {
+          mean[i][j] = 0;
+          correlations[i][j] = 0;
+        }
+      }
+
+      data.forEach(function(featureMember) {
+        featureMember.correlations.forEach(function(destination) {
+          correlations[feature[featureMember.id]][feature[destination.destination]] = +destination.relevance;
+          mean[feature[featureMember.id]][feature[destination.destination]] = +destination.mean;
+        });
+      });
+
+      var regionMatrix = [],
+          regionIds = {},
+          regionNames = [],
+          regionValues = [],
+          regionColors = [];
+
+      for(var i = 0; i < regions.length; i++) {
+        regionMatrix[i] = [];
+        regionValues[i] = [],
+        regionIds[regions[i].id] = i;
+        regionNames.push(regions[i].id);
+        for (var j = 0; j < regions.length; j++) {
+          regionMatrix[i][j] = 0;
+        }
+      }
+
+      data.forEach(function(featureMember) {
+        var sum = 0;
+        featureMember.correlations.forEach(function(corr) { sum += +corr.relevance; });
+        regionValues[regionIds[featureMember.region]].push(sum);
+        featureMember.correlations.forEach(function(destination) {
+          regionMatrix[regionIds[featureMember.region]][regionIds[data[feature[destination.destination]].region]] += +destination.relevance;
+        });
+      });
+
+      regions.forEach(function(region) {
+        var id = regionIds[region.id];
+        var rc = region_colors(id);
+        var scale = d3.scale.linear()
+          .domain(d3.extent(regionValues[id]))
+          .range([d3.rgb(rc).brighter(), d3.rgb(rc).darker()]);
+        regionColors.push(scale);
+      });
+
+      var regionsArc = d3.svg.arc()
+          .innerRadius(innerRadius)
+          .outerRadius(outerRadius);
+
+      var regionsLayout = d3.layout.chord()
+          // .sortGroups(d3.descending)
+          .padding(0.0);
+
+      var featureArc = d3.svg.arc()
+          .innerRadius(innerRadius - 24)
+          .outerRadius(outerRadius - 24);
+
+      var featureLayout = d3.layout.chord()
+          // .sortGroups(d3.descending)
+          .sortSubgroups(d3.descending)
+          .sortChords(function(n, t){
+            n = Math.abs(n);
+            t = Math.abs(t);
+            return t > n ? -1 : ( n > t ? 1 : 0 )
+          })
+          .padding(0.0);
+
+      var chord = d3.svg.chord()
+          .radius(innerRadius - 24);
+
+      featureLayout.matrix(correlations);
+      regionsLayout.matrix(regionMatrix);
+
+      var featureGroups = svg.selectAll("g.feature-group")
+        .data(featureLayout.groups)
+        .enter()
+          .append("svg:g")
+          .attr("class", "feature-group")
+          .append("svg:path")
+            .style("fill", function(d, i) {
+              var sum = 0;
+              data[i].correlations.forEach(function(corr) { sum += +corr.relevance; });
+              return regionColors[regionIds[data[i].region]](sum);
+            })
+            .attr("id", function(d, i) { return "feature-group-path-" + data[d.index].id; })
+            .attr("d", featureArc)
+            .on("click", function(g, i) {
+              var chords = d3.selectAll("path.chord");
+              d3.selectAll("g.region-group path, g.feature-group path").attr("class", "");
+              if(filter == g.index){
+                filter = [];
+                chords
+                  .style("opacity", 1.0);
+                return;
+              }
+              d3.selectAll('#' + d3.event.target.id).attr("class", "active");
+              filter = g.index;
+              chords.style("opacity", 0.0);
+              chords
+                .filter(function(d) {
+                  return d.source.index == filter || d.target.index == filter;
+                })
+                .style("opacity", 1.0);
+            })
+            .append("svg:title")
+            .text(function(d, i) {
+              var sum = 0;
+              data[i].correlations.forEach(function(corr) { sum += +corr.relevance; });
+              return data[i].region + ": " + data[i].id + ' (' + sum + ')';
+            });
+
+      var regionGroups = svg.selectAll("g.region-group")
+        .data(regionsLayout.groups)
+        .enter()
+          .append("svg:g")
+          .attr("class", "region-group");
+
+      regionGroups.append("svg:g")
+        .attr("transform", function(d) {
+          var angle = d.startAngle + (( d.endAngle - d.startAngle ) / 2 )
+          return "rotate(" + (angle * 180 / Math.PI - 90) + ")"
+              + "translate(" + (innerRadius + 5) + ",0)";
+        })
+        .append("svg:text")
+          .attr("transform", function(d) {
+            return d.startAngle > Math.PI ? "rotate(180)" : null;
+          })
+          .style("text-anchor", function(d) {
+            return d.startAngle > Math.PI ? "end" : null;
+          })
+          .style("fill", function(d, i) {
+            return d3.rgb(region_colors(i)).darker();
+          })
+          .text(function(d, i) {
+            return regions[i].region;
+          });
+
+      regionGroups.append("svg:path")
+        .style("fill", function(d, i) {
+          return region_colors(i);
+        })
+        .attr("id", function(d, i) { return "region-group-path-" + d.index; })
+        .attr("d", regionsArc)
+        .on("click", function(g, i) {
+
+          var chords = d3.selectAll("path.chord");
+
+          if(filter.length == undefined || filter.length == 2){
+            filter = [];
+            d3.selectAll("g.region-group path, g.feature-group path").attr("class", "");
+          }
+
+          if(filter.indexOf(regionNames[i]) == -1){
+            filter.push(regionNames[i]);
+            d3.selectAll('#' + d3.event.target.id).attr("class", "active");
+          } else if(filter.length == 1){
+            filter = [];
+            chords
+              .style("opacity", 1.0);
+            d3.selectAll("g.region-group path, g.feature-group path").attr("class", "");
+            return;
+          }
+
+          chords.style("opacity", 0.0);
+
+          if(filter.length == 2){
+            chords
+              .filter(function(d) {
+                return filter.indexOf(data[d.source.index].region) > -1 && filter.indexOf(data[d.target.index].region) > -1;
+              })
+            .style("opacity", 1.0);
+          } else if(filter.length == 1){
+            chords
+              .filter(function(d) {
+                return filter.indexOf(data[d.source.index].region) > -1 || filter.indexOf(data[d.target.index].region) > -1;
+              })
+            .style("opacity", 1.0);
+          }
+
+        })
+        .append("svg:title")
+          .text(function(d, i) {
+            return regions[i].region;
+          })
+
+      svg.selectAll("path.chord")
+        .data(featureLayout.chords)
+        .enter()
+          .append("svg:path")
+          .attr("class", "chord")
+          .style("fill", function(d, i) {
+            return correlation_colors(mean[d.source.index][d.target.index]);
+          })
+          .style("stroke", "none")
+          .attr("d", chord)
+          .append("svg:title")
+          .text(function(d) {
+            return data[d.source.index].id + ' and ' + data[d.target.index].id + ": " + mean[d.source.index][d.target.index];
+          });
+
+      svg.append("svg:text")
+          .attr("class", "label")
+        .style("text-anchor", "middle")
+        .text(query['mean'].toUpperCase());
+
+    });
+  };
+
+  $(document).ready(function(){
+
+    jQuery.fn.d3Click = function () {
+      this.each(function (i, e) {
+        var evt = new MouseEvent("click");
+        e.dispatchEvent(evt);
+      });
+    };
+
+    var atlas = "";
+    // atlas = 'HarvardOxford Cortical';
+    // atlas = 'HarvardOxford Subcortical';
+    atlas = 'MNI Structural';
+    // graphtype({"class": "asd", "atlas": atlas, "features": 200});
+    graphtype({ "id": "tc"  , "class": "tc"  , "mean": "asd" , "atlas": atlas, "features": 400 });
+    graphtype({ "id": "asd" , "class": "asd" , "mean": "tc"  , "atlas": atlas, "features": 400 });
+
+    $("#parcel").keypress(function(e) {
+      if(e.which == 13) {
+        var v = $("#parcel").val();
+        var elem = $("#feature-group-path-" + v);
+        if(elem.size() == 0){
+          filter = [];
+          d3.selectAll("g.region-group path, g.feature-group path").attr("class", "");
+          d3.selectAll("path.chord").style("opacity", 1.0);
+        } else {
+          $("#feature-group-path-" + v).d3Click();
+        }
+      }
+    })
+
+  });
+
+</script>
+  </body>
+</html>

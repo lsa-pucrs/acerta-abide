@@ -1,11 +1,9 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:csv_dataset.CSVDataset {
-        path: "{data_source}",
+        path: "{train_data_source}",
         expect_headers: False,
         expect_labels: True,
-        start: {data_train_start},
-        stop: {data_train_stop},
         transformers: [
             &trans1 !pkl: {data_transform_1},
         ],
@@ -14,7 +12,7 @@
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
         nvis: {layer_in},
         nhid: {layer_out},
-        irange: 0.05,
+        irange: {irange},
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
             corruption_level: {corruption},
         },
@@ -23,16 +21,14 @@
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : 1e-3,
+        learning_rate : 0.0001,
         batch_size : {layer_batch},
         monitoring_dataset: {
             "train": *train,
             "valid": !obj:csv_dataset.CSVDataset {
-                path: "{data_source}",
+                path: "{valid_data_source}",
                 expect_headers: False,
                 expect_labels: True,
-                start: {data_valid_start},
-                stop: {data_valid_stop},
                 transformers: [
                     *trans1,
                 ],
@@ -41,8 +37,6 @@
                 path: "{test_data_source}",
                 expect_headers: False,
                 expect_labels: True,
-                start: 0,
-                stop: 100,
                 transformers: [
                     *trans1,
                 ],
@@ -56,9 +50,8 @@
 
     extensions: [
         !obj:best_params.MonitorBasedSaveBest {
-             channel_name: "valid_objective",
-             save_path: "{save_path}",
-             # start_epoch: 20,
+            channel_name: "valid_objective",
+            save_path: "{save_path}",
         },
         !obj:csv_monitoring.CSVMonitoring {
             name: "{namespace}.{step}.cv_{fold}",

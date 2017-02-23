@@ -1,11 +1,9 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:csv_dataset.CSVDataset {
-        path: "{data_source}",
+        path: "{train_data_source}",
         expect_headers: False,
         expect_labels: True,
-        start: {data_train_start},
-        stop: {data_train_stop},
         transformers: [
             &trans1 !pkl: {data_transform_1},
             &trans2 !pkl: {data_transform_2},
@@ -15,25 +13,25 @@
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
         nvis: {layer_in},
         nhid: {layer_out},
-        irange: 0.05,
+        irange: 0.09258200997,
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
             corruption_level: {corruption},
         },
+        tied_weights: True,
         act_enc: {layer_enc},
         act_dec: {layer_dec},
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : 1e-4,
+        learning_rate : 0.0001,
+        learning_rule: !obj:pylearn2.training_algorithms.learning_rule.AdaGrad {},
         batch_size : {layer_batch},
         monitoring_dataset: {
             "train": *train,
             "valid": !obj:csv_dataset.CSVDataset {
-                path: "{data_source}",
+                path: "{valid_data_source}",
                 expect_headers: False,
                 expect_labels: True,
-                start: {data_valid_start},
-                stop: {data_valid_stop},
                 transformers: [
                     *trans1,
                     *trans2,
@@ -43,15 +41,13 @@
                 path: "{test_data_source}",
                 expect_headers: False,
                 expect_labels: True,
-                start: 0,
-                stop: 100,
                 transformers: [
                     *trans1,
                     *trans2,
                 ],
             },
         },
-        cost : !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
+        cost: !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
         termination_criterion : !obj:pylearn2.termination_criteria.EpochCounter {
             max_epochs: {layer_max_epochs},
         }
@@ -59,9 +55,8 @@
 
     extensions: [
         !obj:best_params.MonitorBasedSaveBest {
-             channel_name: "valid_objective",
-             save_path: "{save_path}",
-             start_epoch: 20,
+            channel_name: "valid_objective",
+            save_path: "{save_path}",
         },
         !obj:csv_monitoring.CSVMonitoring {
             name: "{namespace}.{step}.cv_{fold}",

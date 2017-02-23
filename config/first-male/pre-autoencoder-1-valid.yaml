@@ -9,7 +9,7 @@
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
         nvis: {layer_in},
         nhid: {layer_out},
-        irange: {irange},
+        irange: 0.01702471939,
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
             corruption_level: {corruption},
         },
@@ -19,7 +19,7 @@
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
         learning_rate : 0.0001,
-        batch_size : {layer_batch},
+        batch_size : 100,
         monitoring_dataset: {
             'train': *train,
             'valid': !obj:csv_dataset.CSVDataset {

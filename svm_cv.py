@@ -4,15 +4,17 @@ import argparse
 import numpy as np
 from sklearn.svm import (SVC, LinearSVC)
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import roc_auc_score
 
 from utils import *
 
 
 def svm(X_train, y_train, X_test, y_test):
 
-    clf = LinearSVC(loss='squared_hinge', penalty='l1', dual=False)
+    clf = SVC(C=1.0, kernel='linear', probability=True)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
+    y_proba = clf.predict_proba(X_test)
 
     [[TN, FP], [FN, TP]] = confusion_matrix(y_test, y_pred).astype(float)
     accuracy = (TP + TN) / (TP + TN + FP + FN)
@@ -21,7 +23,9 @@ def svm(X_train, y_train, X_test, y_test):
     sensivity = recall = TP / (TP + FN)
     fscore = 2 * TP / (2 * TP + FP + FN)
 
-    return [accuracy, precision, recall, fscore, sensivity, specificity], clf.coef_.flatten()
+    auc = roc_auc_score(y_test, y_proba[:, 1])
+
+    return [accuracy, precision, recall, fscore, sensivity, specificity, auc], clf.coef_.flatten()
 
 if __name__ == "__main__":
 
@@ -90,4 +94,4 @@ if __name__ == "__main__":
     tablefmt = "grid"
     if args.latex:
         tablefmt = "latex"
-    print tabulate(metrics, headers=["Fold", "Accuracy", "Precision", "Recall", "F-score", "Sensivity", "Specificity"], tablefmt=tablefmt)
+    print tabulate(metrics, headers=["Fold", "Accuracy", "Precision", "Recall", "F-score", "Sensivity", "Specificity", "AUC"], tablefmt=tablefmt)

@@ -1,15 +1,18 @@
 !obj:pylearn2.train.Train {
 
     dataset: &train !obj:csv_dataset.CSVDataset {
-        path: '{train_data_source}',
+        path: "{train_data_source}",
         expect_headers: False,
         expect_labels: True,
+        transformers: [
+            &trans1 !pkl: {data_transform_1},
+        ],
     },
 
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
         nvis: {layer_in},
         nhid: {layer_out},
-        irange: {irange},
+        irange: 0.06123724356,
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
             corruption_level: {corruption},
         },
@@ -21,29 +24,26 @@
         learning_rate : 0.0001,
         batch_size : {layer_batch},
         monitoring_dataset: {
-            'train': *train,
-            'valid': !obj:csv_dataset.CSVDataset {
-                path: '{valid_data_source}',
+            "train": *train,
+            "valid": !obj:csv_dataset.CSVDataset {
+                path: "{valid_data_source}",
                 expect_headers: False,
                 expect_labels: True,
+                transformers: [
+                    *trans1,
+                ],
             },
-            'test': !obj:csv_dataset.CSVDataset {
-                path: '{test_data_source}',
+            "test": !obj:csv_dataset.CSVDataset {
+                path: "{test_data_source}",
                 expect_headers: False,
                 expect_labels: True,
+                transformers: [
+                    *trans1,
+                ],
             },
         },
-        cost: !obj:pylearn2.costs.cost.SumOfCosts {
-            costs: [
-              !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {
-              },
-              !obj:pylearn2.costs.autoencoder.SparseActivation {
-                  coeff: 0.5,
-                  p: 0.2,
-              },
-            ],
-        },
-        termination_criterion: !obj:pylearn2.termination_criteria.EpochCounter {
+        cost: !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
+        termination_criterion : !obj:pylearn2.termination_criteria.EpochCounter {
             max_epochs: {layer_max_epochs},
         }
     },

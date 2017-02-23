@@ -16,13 +16,15 @@
         corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
             corruption_level: {corruption},
         },
+        tied_weights: True,
         act_enc: {layer_enc},
         act_dec: {layer_dec},
     },
 
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
         learning_rate : 0.0001,
-        batch_size : {layer_batch},
+        learning_rule: !obj:pylearn2.training_algorithms.learning_rule.AdaGrad {},
+        batch_size: {layer_batch},
         monitoring_dataset: {
             "train": *train,
             "valid": !obj:csv_dataset.CSVDataset {
@@ -42,31 +44,13 @@
                 ],
             },
         },
-        cost:
-        # !obj:pylearn2.costs.cost.SumOfCosts {
-            # costs: [
-              !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
-              # !obj:pylearn2.costs.autoencoder.SparseActivation {
-              #     coeff: 0.8,
-              #     p: 0.6,
-              # },
-        #     ],
-        # },
+        cost: !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
         termination_criterion : !obj:pylearn2.termination_criteria.EpochCounter {
             max_epochs: {layer_max_epochs},
         }
     },
 
     extensions: [
-        # !obj:pylearn2.training_algorithms.sgd.MonitorBasedLRAdjuster {
-        #     high_trigger: 1.00001,
-        #     low_trigger: 0.99999,
-        #     shrink_amt: 0.2,
-        #     grow_amt: 1.2,
-        #     min_lr: 0.00001,
-        #     max_lr: 1.0,
-        #     dataset_name: 'train'
-        # },
         !obj:best_params.MonitorBasedSaveBest {
             channel_name: "valid_objective",
             save_path: "{save_path}",
