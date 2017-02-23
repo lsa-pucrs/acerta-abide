@@ -4,44 +4,9 @@ import random
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-import urllib
-import urllib2
-import hashlib
 from functools import partial
 from sklearn import preprocessing
-from utils import *
-
-
-def download_derivative(url_path, download_file):
-
-    class HeadRequest(urllib2.Request):
-        def get_method(self):
-            return "HEAD"
-
-    print time.strftime("%H:%M:%S"), download_file, ':',
-
-    if os.path.exists(download_file):
-        fhash = hashlib.md5(open(download_file, 'rb').read()).hexdigest()
-        try:
-            request = HeadRequest(url_path)
-            response = urllib2.urlopen(request)
-            response_headers = response.info()
-            etag = re.sub(r'^"|"$', '', response_headers['etag'])
-            if etag != fhash:
-                os.remove(download_file)
-            else:
-                print 'Match'
-        except urllib2.HTTPError, e:
-            print ("Error code: %s" % e.code)
-
-    if not os.path.exists(download_file):
-        print 'Downloading from', url_path, 'to', download_file
-        try:
-            urllib.urlretrieve(url_path, download_file)
-        except:
-            pass
-        download_data(url_path, download_file)
-    return download_file
+from utils import (load_phenotypes, format_config, run_progress)
 
 
 def compute_connectivity(functional):
@@ -53,6 +18,7 @@ def compute_connectivity(functional):
 
 
 def load_patient(subj, tmpl):
+    print(subj)
     df = pd.read_csv(format_config(tmpl, {
         'subject': subj,
     }), sep="\t")
@@ -64,7 +30,7 @@ def load_patient(subj, tmpl):
     return subj, functional.tolist()
 
 
-def load_patients(subjs, tmpl, jobs=10):
+def load_patients(subjs, tmpl, jobs=1):
     partial_load_patient = partial(load_patient, tmpl=tmpl)
     msg = 'Done {current} of {total}'
     return dict(run_progress(partial_load_patient, subjs, message=msg, jobs=jobs))
@@ -163,22 +129,11 @@ if __name__ == "__main__":
             fold_idxs[fold]['test'] = fold_idxs[fold]['test'] + test
             current = current + fold_size
 
-    s3_prefix = 'https://s3.amazonaws.com/fcp-indi/data/Projects/ABIDE_Initiative/Outputs/'
     download_root = './data/functionals'
     derivatives = ['cpac/filt_global/rois_cc200/{subject}_rois_cc200.1D']
 
     file_ids = pheno['FILE_ID'].tolist()
     for derivative in derivatives:
-        if download_it:
-            for file_id in file_ids:
-                file_path = format_config(derivative, {'subject': file_id})
-                url_path = s3_prefix + file_path
-                output_file = os.path.join(download_root, file_path)
-                output_dir = os.path.dirname(output_file)
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir)
-                download_derivative(url_path, output_file)
-
         file_template = os.path.join(download_root, derivative)
 
         means = []
