@@ -131,7 +131,7 @@ def run_ae1(fold):
     penalty = sparse_coeff * tf.reduce_sum(kl)
     model['cost'] += penalty
 
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model['cost'])
+    optimizer = tf.train.AdamOptimizer(learning_rate).minimize(model['cost'])
 
     train_data = np.loadtxt(train_path, delimiter=",")
     train_X, train_y = train_data[:, 1:], train_data[:, 0]
@@ -447,7 +447,7 @@ def run_nn(fold):
 
             if cost_valid < prev_costs[1]:
                 print "Saving better model"
-                # saver.save(sess, model_path)
+                saver.save(sess, model_path)
                 prev_costs = costs
             else:
                 print
@@ -458,6 +458,6 @@ np.random.seed(19)
 tf.set_random_seed(19)
 
 for fold in range(10):
-    # run_ae1(fold+1)
-    # run_ae2(fold+1)
+    run_ae1(fold+1)
+    run_ae2(fold+1)
     run_nn(fold+1)
