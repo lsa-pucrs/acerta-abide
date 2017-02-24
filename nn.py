@@ -390,6 +390,7 @@ def run_nn(fold):
         #     saver.restore(sess, model_path)
 
         prev_costs = np.array([9999999999] * 3)
+        prev_accs = np.array([0.0] * 3)
 
         for epoch in range(training_iters):
 
@@ -445,10 +446,10 @@ def run_nn(fold):
 
             print "Iter {:5d}, Acc= {:.6f} {:.6f} {:.6f}".format(epoch, acc_train, acc_valid, acc_test),
 
-            if cost_valid < prev_costs[1]:
+            if acc_valid > prev_accs[1]:
                 print "Saving better model"
                 saver.save(sess, model_path)
-                prev_costs = costs
+                prev_accs = accs
             else:
                 print
 
