@@ -110,8 +110,8 @@ def nn(input_size, n_classes, layers, init):
 
 def run_ae1(fold):
 
-    learning_rate = 0.0001
-    training_iters = 4000
+    learning_rate = 0.000001
+    training_iters = 8000
     sparse_p = 0.2
     sparse_coeff = 0.5
     batch_size = 100
@@ -230,7 +230,7 @@ def run_ae2(fold):
 
     tf.reset_default_graph()
 
-    learning_rate = 0.0001
+    learning_rate = 0.000001
     training_iters = 2000
     sparse_p = 0.2
     sparse_coeff = 0.5
