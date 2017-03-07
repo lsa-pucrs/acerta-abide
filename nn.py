@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Autoencoders training and fine-tuning.
+"""
+
+Autoencoders training and fine-tuning.
 
 Usage:
-  nn.py [--folds=N] [--male] [--threshold]
+  nn.py [--folds=N] [--whole] [--male] [--threshold]
   nn.py (-h | --help)
 
 Options:
@@ -14,13 +16,13 @@ Options:
   --threshold   Run model for thresholded subjects
 
 """
-from docopt import docopt
 
 import os
 import math
 import random
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+from docopt import docopt
 from utils import format_config
 
 
@@ -57,15 +59,15 @@ def ae(input_size, code_size, corruption=0.0):
     decode = tf.matmul(encode, W_dec) + b_dec
 
     return {
-        'input': x,
-        'encode': encode,
-        'decode': decode,
-        'cost': tf.sqrt(tf.reduce_mean(tf.square(x - decode))),
-        'params': {
-            'W_enc': W_enc,
-            'b_enc': b_enc,
-            'W_dec': W_dec,
-            'b_dec': b_dec,
+        "input": x,
+        "encode": encode,
+        "decode": decode,
+        "cost": tf.sqrt(tf.reduce_mean(tf.square(x - decode))),
+        "params": {
+            "W_enc": W_enc,
+            "b_enc": b_enc,
+            "W_dec": W_dec,
+            "b_dec": b_dec,
         }
     }
 
@@ -115,29 +117,29 @@ def nn(input_size, n_classes, layers, init=None):
     )
 
     return {
-        'input': input,
-        'expected': y,
-        'output': tf.nn.softmax(y_hat),
-        'dropouts': dropouts,
-        'cost': cost,
-        'actvs': actvs,
-        'params': params,
+        "input": input,
+        "expected": y,
+        "output": tf.nn.softmax(y_hat),
+        "dropouts": dropouts,
+        "cost": cost,
+        "actvs": actvs,
+        "params": params,
     }
 
 
-def run_ae1(fold, model_path, data_path, code_size=1000):
+def run_ae1(fold, exp, model_path, data_path, code_size=1000):
 
     learning_rate = 0.0001
-    training_iters = 700
+    training_iters = 1
     sparse_p = 0.2
     sparse_coeff = 0.5
     batch_size = 100
     n_classes = 2
 
-    model_path = format_config(model_path, {'fold': str(fold)})
-    train_path = format_config(data_path, {'fold': str(fold), "datatype": "train"})
-    valid_path = format_config(data_path, {'fold': str(fold), "datatype": "valid"})
-    test_path = format_config(data_path, {'fold': str(fold), "datatype": "test"})
+    model_path = format_config(model_path, {"fold": str(fold), "exp": exp})
+    train_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "train"})
+    valid_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "valid"})
+    test_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "test"})
 
     train_data = np.loadtxt(train_path, delimiter=",")
     train_X, train_y = train_data[:, 1:], train_data[:, 0]
@@ -151,13 +153,13 @@ def run_ae1(fold, model_path, data_path, code_size=1000):
     model = ae(train_X.shape[1], code_size, corruption=0.7)
 
     # Sparsity penalty
-    p_hat = tf.reduce_mean(tf.abs(model['encode']), 0)
+    p_hat = tf.reduce_mean(tf.abs(model["encode"]), 0)
     kl = sparse_p * tf.log(sparse_p / p_hat) + \
         (1 - sparse_p) * tf.log((1 - sparse_p) / (1 - p_hat))
     penalty = sparse_coeff * tf.reduce_sum(kl)
-    model['cost'] += penalty
+    model["cost"] += penalty
 
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model['cost'])
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model["cost"])
 
     init = tf.global_variables_initializer()
     with tf.Session() as sess:
@@ -165,9 +167,6 @@ def run_ae1(fold, model_path, data_path, code_size=1000):
         sess.run(init)
 
         saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
-        # if os.path.isfile(model_path):
-        #     print "Restoring", model_path
-        #     saver.restore(sess, model_path)
 
         prev_costs = np.array([9999999999] * 3)
 
@@ -183,23 +182,23 @@ def run_ae1(fold, model_path, data_path, code_size=1000):
 
                 batch_xs, batch_ys = train_X[from_i:to_i], train_y[from_i:to_i]
                 _, cost_train = sess.run(
-                    [optimizer, model['cost']],
+                    [optimizer, model["cost"]],
                     feed_dict={
-                        model['input']: batch_xs
+                        model["input"]: batch_xs
                     }
                 )
 
                 cost_valid = sess.run(
-                    model['cost'],
+                    model["cost"],
                     feed_dict={
-                        model['input']: valid_X
+                        model["input"]: valid_X
                     }
                 )
 
                 cost_test = sess.run(
-                    model['cost'],
+                    model["cost"],
                     feed_dict={
-                        model['input']: test_X
+                        model["input"]: test_X
                     }
                 )
 
@@ -217,11 +216,11 @@ def run_ae1(fold, model_path, data_path, code_size=1000):
                 print
 
 
-def run_ae2(fold, model_path, data_path, prev_model_path, code_size=600, prev_code_size=1000):
+def run_ae2(fold, exp, model_path, data_path, prev_model_path, code_size=600, prev_code_size=1000):
 
-    train_path = format_config(data_path, {'fold': str(fold), "datatype": "train"})
-    valid_path = format_config(data_path, {'fold': str(fold), "datatype": "valid"})
-    test_path = format_config(data_path, {'fold': str(fold), "datatype": "test"})
+    train_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "train"})
+    valid_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "valid"})
+    test_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "test"})
 
     train_data = np.loadtxt(train_path, delimiter=",")
     train_X, train_y = train_data[:, 1:], train_data[:, 0]
@@ -232,7 +231,7 @@ def run_ae2(fold, model_path, data_path, prev_model_path, code_size=600, prev_co
     test_data = np.loadtxt(test_path, delimiter=",")
     test_X, test_y = test_data[:, 1:], test_data[:, 0]
 
-    prev_model_path = format_config(prev_model_path, {'fold': str(fold)})
+    prev_model_path = format_config(prev_model_path, {"fold": str(fold), "exp": exp})
     prev_model = ae(train_X.shape[1], prev_code_size, corruption=0.0)
     init = tf.global_variables_initializer()
     with tf.Session() as sess:
@@ -241,32 +240,32 @@ def run_ae2(fold, model_path, data_path, prev_model_path, code_size=600, prev_co
         if os.path.isfile(prev_model_path):
             print "Restoring", prev_model_path
             saver.restore(sess, prev_model_path)
-        train_X = sess.run(prev_model['encode'], feed_dict={prev_model['input']: train_X})
-        valid_X = sess.run(prev_model['encode'], feed_dict={prev_model['input']: valid_X})
-        test_X = sess.run(prev_model['encode'], feed_dict={prev_model['input']: test_X})
+        train_X = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: train_X})
+        valid_X = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: valid_X})
+        test_X = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: test_X})
     del prev_model
     tf.reset_default_graph()
 
     learning_rate = 0.0001
-    training_iters = 2000
+    training_iters = 1
     sparse_p = 0.2
     sparse_coeff = 0.5
     batch_size = 10
     n_classes = 2
 
-    model_path = format_config(model_path, {'fold': str(fold)})
+    model_path = format_config(model_path, {"fold": str(fold), "exp": exp})
     model = ae(prev_code_size, code_size, corruption=0.9)
 
     # Sparsity penalty
     """
-    p_hat = tf.reduce_mean(tf.abs(model['encode']), 0)
+    p_hat = tf.reduce_mean(tf.abs(model["encode"]), 0)
     kl = sparse_p * tf.log(sparse_p / p_hat) + \
         (1 - sparse_p) * tf.log((1 - sparse_p) / (1 - p_hat))
     penalty = sparse_coeff * tf.reduce_sum(kl)
-    model['cost'] += penalty
+    model["cost"] += penalty
     """
 
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model['cost'])
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model["cost"])
 
     init = tf.global_variables_initializer()
     with tf.Session() as sess:
@@ -274,9 +273,6 @@ def run_ae2(fold, model_path, data_path, prev_model_path, code_size=600, prev_co
         sess.run(init)
 
         saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
-        # if os.path.isfile(model_path):
-        #     print "Restoring", model_path
-        #     saver.restore(sess, model_path)
 
         prev_costs = np.array([9999999999] * 3)
 
@@ -292,23 +288,23 @@ def run_ae2(fold, model_path, data_path, prev_model_path, code_size=600, prev_co
 
                 batch_xs, batch_ys = train_X[from_i:to_i], train_y[from_i:to_i]
                 _, cost_train = sess.run(
-                    [optimizer, model['cost']],
+                    [optimizer, model["cost"]],
                     feed_dict={
-                        model['input']: batch_xs
+                        model["input"]: batch_xs
                     }
                 )
 
                 cost_valid = sess.run(
-                    model['cost'],
+                    model["cost"],
                     feed_dict={
-                        model['input']: valid_X
+                        model["input"]: valid_X
                     }
                 )
 
                 cost_test = sess.run(
-                    model['cost'],
+                    model["cost"],
                     feed_dict={
-                        model['input']: test_X
+                        model["input"]: test_X
                     }
                 )
 
@@ -348,10 +344,10 @@ def load_ae_encoder(input_size, code_size, model_path):
         reset()
 
 
-def run_nn(fold, model_path, data_path, prev_model_1_path, prev_model_2_path, code_size_1=1000, code_size_2=600):
+def run_nn(fold, exp, model_path, data_path, prev_model_1_path, prev_model_2_path, code_size_1=1000, code_size_2=600):
 
     learning_rate = 0.0005
-    training_iters = 100
+    training_iters = 1
     batch_size = 10
     n_classes = 2
 
@@ -362,9 +358,9 @@ def run_nn(fold, model_path, data_path, prev_model_1_path, prev_model_2_path, co
     final_momentum = .9
     saturate = 100
 
-    train_path = format_config(data_path, {'fold': str(fold), "datatype": "train"})
-    valid_path = format_config(data_path, {'fold': str(fold), "datatype": "valid"})
-    test_path = format_config(data_path, {'fold': str(fold), "datatype": "test"})
+    train_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "train"})
+    valid_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "valid"})
+    test_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "test"})
 
     train_data = np.loadtxt(train_path, delimiter=",")
     train_X, train_y = train_data[:, 1:], train_data[:, 0]
@@ -378,20 +374,20 @@ def run_nn(fold, model_path, data_path, prev_model_1_path, prev_model_2_path, co
     test_X, test_y = test_data[:, 1:], test_data[:, 0]
     test_y = np.array([to_softmax(n_classes, y) for y in test_y])
 
-    ae1 = load_ae_encoder(train_X.shape[1], code_size_1, format_config(prev_model_1_path, {'fold': str(fold)}))
-    ae2 = load_ae_encoder(code_size_1, code_size_2, format_config(prev_model_2_path, {'fold': str(fold)}))
+    ae1 = load_ae_encoder(train_X.shape[1], code_size_1, format_config(prev_model_1_path, {"fold": str(fold), "exp": exp}))
+    ae2 = load_ae_encoder(code_size_1, code_size_2, format_config(prev_model_2_path, {"fold": str(fold), "exp": exp}))
 
-    model_path = format_config(model_path, {'fold': str(fold)})
+    model_path = format_config(model_path, {"fold": str(fold), "exp": exp})
     model = nn(train_X.shape[1], n_classes, [code_size_1, code_size_2], [
         {"W": ae1["W_enc"], "b": ae1["b_enc"]},
         {"W": ae2["W_enc"], "b": ae2["b_enc"]},
     ])
     model["momentum"] = tf.placeholder("float32")
-    optimizer = tf.train.MomentumOptimizer(learning_rate, model["momentum"]).minimize(model['cost'])
+    optimizer = tf.train.MomentumOptimizer(learning_rate, model["momentum"]).minimize(model["cost"])
 
     correct_prediction = tf.equal(
-        tf.argmax(model['output'], 1),
-        tf.argmax(model['expected'], 1)
+        tf.argmax(model["output"], 1),
+        tf.argmax(model["expected"], 1)
     )
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
@@ -401,9 +397,6 @@ def run_nn(fold, model_path, data_path, prev_model_1_path, prev_model_2_path, co
         sess.run(init)
 
         saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
-        # if os.path.isfile(model_path):
-        #     print "Restoring", model_path
-        #     saver.restore(sess, model_path)
 
         prev_costs = np.array([9999999999] * 3)
         prev_accs = np.array([0.0] * 3)
@@ -430,33 +423,33 @@ def run_nn(fold, model_path, data_path, prev_model_1_path, prev_model_2_path, co
                 batch_xs, batch_ys = train_X[from_i:to_i], train_y[from_i:to_i]
 
                 _, cost_train, acc_train = sess.run(
-                    [optimizer, model['cost'], accuracy],
+                    [optimizer, model["cost"], accuracy],
                     feed_dict={
-                        model['input']: batch_xs,
-                        model['expected']: batch_ys,
-                        model['dropouts'][0]: dropout_1,
-                        model['dropouts'][1]: dropout_2,
-                        model['momentum']: momentum,
+                        model["input"]: batch_xs,
+                        model["expected"]: batch_ys,
+                        model["dropouts"][0]: dropout_1,
+                        model["dropouts"][1]: dropout_2,
+                        model["momentum"]: momentum,
                     }
                 )
 
                 cost_valid, acc_valid = sess.run(
-                    [model['cost'], accuracy],
+                    [model["cost"], accuracy],
                     feed_dict={
-                        model['input']: valid_X,
-                        model['expected']: valid_y,
-                        model['dropouts'][0]: 1.0,
-                        model['dropouts'][1]: 1.0,
+                        model["input"]: valid_X,
+                        model["expected"]: valid_y,
+                        model["dropouts"][0]: 1.0,
+                        model["dropouts"][1]: 1.0,
                     }
                 )
 
                 cost_test, acc_test = sess.run(
-                    [model['cost'], accuracy],
+                    [model["cost"], accuracy],
                     feed_dict={
-                        model['input']: test_X,
-                        model['expected']: test_y,
-                        model['dropouts'][0]: 1.0,
-                        model['dropouts'][1]: 1.0,
+                        model["input"]: test_X,
+                        model["expected"]: test_y,
+                        model["dropouts"][0]: 1.0,
+                        model["dropouts"][1]: 1.0,
                     }
                 )
 
@@ -493,75 +486,39 @@ if __name__ == "__main__":
     code_size_1 = 1000
     code_size_2 = 600
 
-    for fold in range(1, 11):
+    experiments = []
+    if arguments["--whole"]:
+        experiments.append("whole")
+    if arguments["--male"]:
+        experiments.append("male")
+    if arguments["--threshold"]:
+        experiments.append("threshold")
 
-        reset()
+    maxfolds = int(arguments["--folds"]) + 1
 
-        # run_ae1(fold, model_path="./data/models/autoencoder-1-{fold}.ckpt",
-        #               data_path="./data/corr/corr_1D_cv_{fold}_{datatype}.csv",
-        #               code_size=code_size_1)
+    for exp in experiments:
 
-        # reset()
+        for fold in range(1, maxfolds):
 
-        run_ae2(fold, model_path="./data/models/autoencoder-2-{fold}.ckpt",
-                      data_path="./data/corr/corr_1D_cv_{fold}_{datatype}.csv",
-                      prev_model_path="./data/models/autoencoder-1-{fold}.ckpt",
-                      prev_code_size=code_size_1,
-                      code_size=code_size_2)
+            reset()
 
-        reset()
+            run_ae1(fold, exp, model_path="./data/models/autoencoder-1-{fold}_{exp}.ckpt",
+                               data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_{exp}.csv",
+                               code_size=code_size_1)
 
-        run_nn(fold,  model_path="./data/models/mlp-{fold}.ckpt",
-                      data_path="./data/corr/corr_1D_cv_{fold}_{datatype}.csv",
-                      prev_model_1_path="./data/models/autoencoder-1-{fold}.ckpt",
-                      prev_model_2_path="./data/models/autoencoder-2-{fold}.ckpt",
-                      code_size_1=code_size_1,
-                      code_size_2=code_size_2)
+            reset()
 
-    for fold in range(1, 11):
+            run_ae2(fold, exp, model_path="./data/models/autoencoder-2-{fold}_{exp}.ckpt",
+                               data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_{exp}.csv",
+                               prev_model_path="./data/models/autoencoder-1-{fold}_{exp}.ckpt",
+                               prev_code_size=code_size_1,
+                               code_size=code_size_2)
 
-        reset()
+            reset()
 
-        run_ae1(fold, model_path="./data/models/autoencoder-1-{fold}_male.ckpt",
-                      data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv",
-                      code_size=code_size_1)
-
-        reset()
-
-        run_ae2(fold, model_path="./data/models/autoencoder-2-{fold}_male.ckpt",
-                      data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv",
-                      prev_model_path="./data/models/autoencoder-1-{fold}_male.ckpt",
-                      prev_code_size=code_size_1,
-                      code_size=code_size_2)
-
-        reset()
-
-        run_nn(fold, model_path="./data/models/mlp-{fold}_male.ckpt",
-                     data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv",
-                     prev_model_1_path="./data/models/autoencoder-1-{fold}_male.ckpt",
-                     prev_model_2_path="./data/models/autoencoder-2-{fold}_male.ckpt",
-                     code_size_1=code_size_1, code_size_2=code_size_2)
-
-    for fold in range(1, 11):
-
-        reset()
-
-        run_ae1(fold, model_path="./data/models/autoencoder-1-{fold}_male.ckpt",
-                      data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv",
-                      code_size=code_size_1)
-
-        reset()
-
-        run_ae2(fold, model_path="./data/models/autoencoder-2-{fold}_male.ckpt",
-                      data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv",
-                      prev_model_path="./data/models/autoencoder-1-{fold}_male.ckpt",
-                      prev_code_size=code_size_1,
-                      code_size=code_size_2)
-
-        reset()
-
-        run_nn(fold, model_path="./data/models/mlp-{fold}_male.ckpt",
-                     data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv",
-                     prev_model_1_path="./data/models/autoencoder-1-{fold}_male.ckpt",
-                     prev_model_2_path="./data/models/autoencoder-2-{fold}_male.ckpt",
-                     code_size_1=code_size_1, code_size_2=code_size_2)
+            run_nn(fold, exp, model_path="./data/models/mlp-{fold}_{exp}.ckpt",
+                              data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_{exp}.csv",
+                              prev_model_1_path="./data/models/autoencoder-1-{fold}_{exp}.ckpt",
+                              prev_model_2_path="./data/models/autoencoder-2-{fold}_{exp}.ckpt",
+                              code_size_1=code_size_1,
+                              code_size_2=code_size_2)
