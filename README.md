@@ -20,7 +20,7 @@ This command will download the preprocessed CC-200 dataset from Amazon S3.
 And compile the dataset into CV folds and by experiment.
 
 ```bash
-nvidia-docker run -it --rm \
+nvidia-docker run --rm \
     -v $(realpath data):/opt/acerta-abide/data \
     acerta-abide \
     python prepare_data.py \
@@ -32,7 +32,7 @@ nvidia-docker run -it --rm \
 ## Model training
 
 ```bash
-nvidia-docker run -it --rm \
+nvidia-docker run --rm \
     -v $(realpath data):/opt/acerta-abide/data \
     acerta-abide \
     python nn.py \
@@ -44,7 +44,7 @@ nvidia-docker run -it --rm \
 ## Model evaluation
 
 ```bash
-nvidia-docker run -it --rm \
+nvidia-docker run --rm \
     -v $(realpath data):/opt/acerta-abide/data \
     acerta-abide \
     python nn_evaluate.py \
