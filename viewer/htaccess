@@ -1,5 +1,0 @@
-Options +FollowSymlinks
-RewriteEngine On
-RewriteBase /~anibal.heinsfeld/acerta-abide
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^(.*)$ app.fcgi/$1 [QSA,L]
