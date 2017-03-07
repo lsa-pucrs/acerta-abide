@@ -9,13 +9,20 @@ import pandas as pd
 identifier = '(([a-zA-Z]_)?([a-zA-Z0-9_]*))'
 replacement_field = '{' + identifier + '}'
 
+
 def load_phenotypes(pheno_path):
     pheno = pd.read_csv(pheno_path)
     pheno = pheno[pheno['FILE_ID'] != 'no_filename']
+
     pheno['DX_GROUP'] = pheno['DX_GROUP'].apply(lambda v: int(v)-1)
     pheno['SITE_ID'] = pheno['SITE_ID'].apply(lambda v: re.sub('_[0-9]', '', v))
+    pheno['SEX'] = pheno['SEX'].apply(lambda v: {1: "M", 2: "F"}[v])
+    pheno['MEAN_FD'] = pheno['func_mean_fd']
+    pheno['SUB_IN_SMP'] = pheno['SUB_IN_SMP'].apply(lambda v: v == 1)
+
     pheno.index = pheno['FILE_ID']
-    return pheno[['FILE_ID', 'DX_GROUP', 'SEX', 'SITE_ID']]
+
+    return pheno[['FILE_ID', 'DX_GROUP', 'SEX', 'SITE_ID', 'MEAN_FD', 'SUB_IN_SMP']]
 
 
 class config_dict(dict):
@@ -154,53 +161,5 @@ def run_parallel(call, args, gpus=None, threads=1, concurr_key='concurr'):
     return results
 
 
-def parallel_theano(params, execute, concurr_key='concurr'):
-
-    if concurr_key + '_queue' in params:
-        q = params[concurr_key + '_queue']
-        gpu = q.get(True)
-        os.environ['THEANO_FLAGS'] = "device=" + gpu
-    else:
-        os.environ['THEANO_FLAGS'] = "device=cpu"
-
-    # device=cpu,floatX=float32,nvcc.fastmath=True,base_compiledir=/tmp/theano/20
-
-    os.environ['THEANO_FLAGS'] = os.environ['THEANO_FLAGS'] + "," + \
-        "floatX=float32," + \
-        "nvcc.fastmath=True," + \
-        "base_compiledir=/tmp/theano/" + str(os.getpid())
-
-    import theano
-
-    result = execute(params)
-
-    if concurr_key + '_queue' in params:
-        q.put(gpu)
-
-    return result
-
-
-def executed_experiments(pipeline, config):
-    path = os.path.join(root(), 'experiments', pipeline + '.' + config)
-    experiments = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
-    return experiments
-
-
 def root():
     return os.path.dirname(os.path.realpath(__file__))
-
-
-def cvize(filename, fold, filetype=None):
-    name, extension = os.path.splitext(filename)
-    cv = name + '_cv_' + str(fold)
-    if filetype is not None:
-        cv = cv + '_' + filetype
-    return cv + extension
-
-if __name__ == "__main__":
-
-    # print gpurangearg('gpu0,gpu1,gpu2')
-    # print gpurangearg('1-7')
-    phenos = load_phenotypes('./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv')
-    print phenos.loc[['Caltech_0051483','SBL_0051580']].to_records(index=False)
-    print phenos[phenos['FILE_ID']=='Caltech_0051483'].to_records(index=False)[0]
