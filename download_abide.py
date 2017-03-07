@@ -31,10 +31,8 @@ def collect_and_download(derivative, pipeline, strategy, out_dir):
     for pheno_row in pheno_list[1:]:
         cs_row = pheno_row.split(",")
         row_file_id = cs_row[file_idx]
-
         if row_file_id == "no_filename":
             continue
-
         filename = row_file_id + "_" + derivative + extension
         s3_path = "/".join([s3_prefix, "Outputs", pipeline, strategy, derivative, filename])
         s3_paths.append(s3_path)
@@ -44,10 +42,8 @@ def collect_and_download(derivative, pipeline, strategy, out_dir):
         rel_path = s3_path.lstrip(s3_prefix).split("/")[-1]
         download_file = os.path.join(out_dir, rel_path)
         download_dir = os.path.dirname(download_file)
-
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
-
         if not os.path.exists(download_file):
             print "Retrieving: %s" % download_file
             urllib.urlretrieve(s3_path, download_file)
