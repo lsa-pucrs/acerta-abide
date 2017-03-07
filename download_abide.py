@@ -58,7 +58,7 @@ def collect_and_download(derivative, pipeline, strategy, out_dir):
 
 if __name__ == "__main__":
 
-    derivatives = ["rois_cc200"]
+    derivatives = ["rois_aal", "rois_cc200", "rois_dosenbach160", "rois_ez", "rois_ho", "rois_tt"]
     pipeline = "cpac"
     strategy = "filt_global"
 
