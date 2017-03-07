@@ -1,11 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+
+Data preparation
+
+Usage:
+  nn.py [--folds=N] [--whole] [--male] [--threshold]
+  nn.py (-h | --help)
+
+Options:
+  -h --help     Show this screen.
+  --folds=N     Number of folds [default: 10].
+  --male        Run model for male subjects
+  --threshold   Run model for thresholded subjects
+
+"""
+
 import os
 import random
+import pandas as pd
 import numpy as np
 import numpy.ma as ma
-import pandas as pd
+from docopt import docopt
 from functools import partial
 from sklearn import preprocessing
 from utils import (load_phenotypes, format_config, run_progress)
@@ -33,7 +50,7 @@ def load_patient(subj, tmpl):
 
 def load_patients(subjs, tmpl, jobs=10):
     partial_load_patient = partial(load_patient, tmpl=tmpl)
-    msg = 'Done {current} of {total}'
+    msg = 'Processing {current} of {total}'
     return dict(run_progress(partial_load_patient, subjs, message=msg, jobs=jobs))
 
 
@@ -42,8 +59,6 @@ def prepare_data(pheno, fold_idxs, derivatives_data, output):
     name, ext = os.path.splitext(output)
 
     for fold, data in enumerate(fold_idxs):
-
-        print 'fold ' + str(fold+1) + ':',
 
         for datatype in data:
 
@@ -67,10 +82,6 @@ def prepare_data(pheno, fold_idxs, derivatives_data, output):
 
             np.savetxt(typename + ext, final, delimiter=',')
             np.savetxt(typename + '.ids' + ext, ids, delimiter=',', fmt="%s")
-
-            print datatype,
-
-        print
 
 
 def prepare_folds(folds, pheno, output):
@@ -114,9 +125,10 @@ def prepare_folds(folds, pheno, output):
             m = np.mean(derivatives_data[pid])
             means.append(m)
             means_perclass[pheno[pheno['FILE_ID'] == pid]['DX_GROUP'][0]].append(m)
-        print np.mean(means), np.std(means)
-        print np.mean(means_perclass[0]), np.mean(means_perclass[1])
-        print np.std(means_perclass[0]), np.std(means_perclass[1])
+
+        print "Class=All, Mean={:.6f}, Std={:.6f}".format(np.mean(means), np.std(means))
+        print "Class=ASD, Mean={:.6f}, Std={:.6f}".format(np.mean(means_perclass[0]), np.std(means_perclass[0]))
+        print "Class= TC, Mean={:.6f}, Std={:.6f}".format(np.mean(means_perclass[1]), np.std(means_perclass[1]))
 
         prepare_data(pheno, fold_idxs, derivatives_data, output=output)
 
@@ -126,14 +138,25 @@ if __name__ == "__main__":
     random.seed(19)
     np.random.seed(19)
 
-    FOLDS = 10
+    arguments = docopt(__doc__)
+
+    folds = int(arguments["--folds"])
     pheno_path = './data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv'
     pheno = load_phenotypes(pheno_path)
 
-    # prepare_folds(FOLDS, pheno, output='./data/corr/corr_1D_cv_{fold}_{datatype}.csv')
+    if arguments["--whole"]:
+        print
+        print "Preparing whole dataset"
+        prepare_folds(folds, pheno, output='./data/corr/corr_1D_cv_{fold}_{datatype}_whole.csv')
 
-    # pheno_male = pheno[pheno["SEX"] == "M"]
-    # prepare_folds(FOLDS, pheno_male, output='./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv')
+    if arguments["--male"]:
+        print
+        print "Preparing male dataset"
+        pheno_male = pheno[pheno["SEX"] == "M"]
+        prepare_folds(folds, pheno_male, output='./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv')
 
-    pheno_thresh = pheno[pheno["MEAN_FD"] <= 0.2]
-    prepare_folds(FOLDS, pheno_thresh, output='./data/corr/corr_1D_cv_{fold}_{datatype}_thresh.csv')
+    if arguments["--threshold"]:
+        print
+        print "Preparing thresholded dataset"
+        pheno_thresh = pheno[pheno["MEAN_FD"] <= 0.2]
+        prepare_folds(folds, pheno_thresh, output='./data/corr/corr_1D_cv_{fold}_{datatype}_thresh.csv')
