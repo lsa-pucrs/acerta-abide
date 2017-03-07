@@ -28,6 +28,7 @@ nvidia-docker run --rm \
         --male \
         --threshold \
         --folds 10 \
+        cc200 \
     2> /dev/null
 ```
 
@@ -42,6 +43,7 @@ nvidia-docker run --rm \
         --male \
         --threshold \
         --folds 10 \
+        cc200 \
     2> /dev/null
 ```
 
@@ -56,5 +58,6 @@ nvidia-docker run --rm \
         --male \
         --threshold \
         --folds 10 \
+        cc200 \
     2> /dev/null
 ```
