@@ -131,7 +131,7 @@ def nn(input_size, n_classes, layers, init=None):
 def run_ae1(exp, fold, model_path, data_path, code_size=1000):
 
     learning_rate = 0.0001
-    training_iters = 1
+    training_iters = 700
     sparse_p = 0.2
     sparse_coeff = 0.5
     batch_size = 100
@@ -248,7 +248,7 @@ def run_ae2(exp, fold, model_path, data_path, prev_model_path, code_size=600, pr
     tf.reset_default_graph()
 
     learning_rate = 0.0001
-    training_iters = 1
+    training_iters = 2000
     sparse_p = 0.2
     sparse_coeff = 0.5
     batch_size = 10
@@ -348,7 +348,7 @@ def load_ae_encoder(input_size, code_size, model_path):
 def run_nn(exp, fold, model_path, data_path, prev_model_1_path, prev_model_2_path, code_size_1=1000, code_size_2=600):
 
     learning_rate = 0.0005
-    training_iters = 1
+    training_iters = 100
     batch_size = 10
     n_classes = 2
 
