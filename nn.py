@@ -128,7 +128,7 @@ def nn(input_size, n_classes, layers, init=None):
     }
 
 
-def run_ae1(fold, exp, model_path, data_path, code_size=1000):
+def run_ae1(exp, fold, model_path, data_path, code_size=1000):
 
     learning_rate = 0.0001
     training_iters = 1
@@ -207,7 +207,7 @@ def run_ae1(fold, exp, model_path, data_path, code_size=1000):
 
             costs = costs.mean(axis=0)
             cost_train, cost_valid, cost_test = costs
-            print "Model=ae1, Fold={:2d}, Iter {:5d}, Cost= {:.6f} {:.6f} {:.6f}".format(fold, epoch, cost_train, cost_valid, cost_test),
+            print "Exp={:s}, Fold={:2d}, Model=ae1, Iter {:5d}, Cost= {:.6f} {:.6f} {:.6f}".format(exp, fold, epoch, cost_train, cost_valid, cost_test),
 
             if cost_valid < prev_costs[1]:
                 print "Saving better model"
@@ -217,7 +217,7 @@ def run_ae1(fold, exp, model_path, data_path, code_size=1000):
                 print
 
 
-def run_ae2(fold, exp, model_path, data_path, prev_model_path, code_size=600, prev_code_size=1000):
+def run_ae2(exp, fold, model_path, data_path, prev_model_path, code_size=600, prev_code_size=1000):
 
     train_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "train"})
     valid_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "valid"})
@@ -313,7 +313,7 @@ def run_ae2(fold, exp, model_path, data_path, prev_model_path, code_size=600, pr
 
             costs = costs.mean(axis=0)
             cost_train, cost_valid, cost_test = costs
-            print "Model=ae2, Fold={:2d}, Iter {:5d}, Cost= {:.6f} {:.6f} {:.6f}".format(fold, epoch, cost_train, cost_valid, cost_test),
+            print "Exp={:s}, Fold={:2d}, Model=ae2, Iter {:5d}, Cost= {:.6f} {:.6f} {:.6f}".format(exp, fold, epoch, cost_train, cost_valid, cost_test),
 
             if cost_valid < prev_costs[1]:
                 print "Saving better model"
@@ -345,7 +345,7 @@ def load_ae_encoder(input_size, code_size, model_path):
         reset()
 
 
-def run_nn(fold, exp, model_path, data_path, prev_model_1_path, prev_model_2_path, code_size_1=1000, code_size_2=600):
+def run_nn(exp, fold, model_path, data_path, prev_model_1_path, prev_model_2_path, code_size_1=1000, code_size_2=600):
 
     learning_rate = 0.0005
     training_iters = 1
@@ -359,6 +359,7 @@ def run_nn(fold, exp, model_path, data_path, prev_model_1_path, prev_model_2_pat
     final_momentum = .9
     saturate = 100
 
+    model_path = format_config(model_path, {"fold": str(fold), "exp": exp})
     train_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "train"})
     valid_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "valid"})
     test_path = format_config(data_path, {"fold": str(fold), "exp": exp, "datatype": "test"})
@@ -378,7 +379,6 @@ def run_nn(fold, exp, model_path, data_path, prev_model_1_path, prev_model_2_pat
     ae1 = load_ae_encoder(train_X.shape[1], code_size_1, format_config(prev_model_1_path, {"fold": str(fold), "exp": exp}))
     ae2 = load_ae_encoder(code_size_1, code_size_2, format_config(prev_model_2_path, {"fold": str(fold), "exp": exp}))
 
-    model_path = format_config(model_path, {"fold": str(fold), "exp": exp})
     model = nn(train_X.shape[1], n_classes, [code_size_1, code_size_2], [
         {"W": ae1["W_enc"], "b": ae1["b_enc"]},
         {"W": ae2["W_enc"], "b": ae2["b_enc"]},
@@ -463,7 +463,7 @@ def run_nn(fold, exp, model_path, data_path, prev_model_1_path, prev_model_2_pat
             accs = accs.mean(axis=0)
             acc_train, acc_valid, acc_test = accs
 
-            print "Model=nn, Fold={:2d}, Iter={:5d}, Acc={:.6f} {:.6f} {:.6f}, Momentum={:.6f}".format(fold, epoch, acc_train, acc_valid, acc_test, momentum),
+            print "Exp={:s}, Fold={:2d}, Model=nn, Iter={:5d}, Acc={:.6f} {:.6f} {:.6f}, Momentum={:.6f}".format(exp, fold, epoch, acc_train, acc_valid, acc_test, momentum),
 
             if acc_valid > prev_accs[1] and epoch > 20:
                 print "Saving better model"
@@ -503,13 +503,13 @@ if __name__ == "__main__":
 
             reset()
 
-            run_ae1(fold, exp, model_path="./data/models/{exp}_{fold}_autoencoder-1_.ckpt",
+            run_ae1(exp, fold, model_path="./data/models/{exp}_{fold}_autoencoder-1_.ckpt",
                                data_path="./data/corr/{exp}_{fold}_{datatype}.csv",
                                code_size=code_size_1)
 
             reset()
 
-            run_ae2(fold, exp, model_path="./data/models/{exp}_{fold}_autoencoder-2.ckpt",
+            run_ae2(exp, fold, model_path="./data/models/{exp}_{fold}_autoencoder-2.ckpt",
                                data_path="./data/corr/{exp}_{fold}_{datatype}.csv",
                                prev_model_path="./data/models/{exp}_{fold}_autoencoder-1.ckpt",
                                prev_code_size=code_size_1,
@@ -517,7 +517,7 @@ if __name__ == "__main__":
 
             reset()
 
-            run_nn(fold, exp, model_path="./data/models/{exp}_{fold}_mlp.ckpt",
+            run_nn(exp, fold, model_path="./data/models/{exp}_{fold}_mlp.ckpt",
                               data_path="./data/corr/{exp}_{fold}_{datatype}.csv",
                               prev_model_1_path="./data/models/{exp}_{fold}_autoencoder-1.ckpt",
                               prev_model_2_path="./data/models/{exp}_{fold}_autoencoder-2.ckpt",

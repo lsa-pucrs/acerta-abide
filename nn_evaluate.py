@@ -85,6 +85,8 @@ if __name__ == "__main__":
 
     maxfolds = int(arguments["--folds"]) + 1
 
+    pd.set_option("display.expand_frame_repr", False)
+
     results = []
     for exp in experiments:
         for fold in range(1, maxfolds):
@@ -96,4 +98,4 @@ if __name__ == "__main__":
     mean = grouped.agg(np.mean).reset_index()
     mean["Fold"] = "Mean"
     df = df.append(mean)
-    print df[cols].sort(["Exp", "Fold"])
+    print df[cols].sort_values(["Exp", "Fold"])
