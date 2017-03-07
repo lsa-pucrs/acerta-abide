@@ -10,8 +10,9 @@ Usage:
   nn.py (-h | --help)
 
 Options:
-  -h --help     Show this screen.
-  --folds=N     Number of folds [default: 10].
+  -h --help     Show this screen
+  --folds=N     Number of folds [default: 10]
+  --whole       Run model for the whole dataset
   --male        Run model for male subjects
   --threshold   Run model for thresholded subjects
 
@@ -481,10 +482,10 @@ def reset():
 
 if __name__ == "__main__":
 
-    arguments = docopt(__doc__)
-
     code_size_1 = 1000
     code_size_2 = 600
+
+    arguments = docopt(__doc__)
 
     experiments = []
     if arguments["--whole"]:

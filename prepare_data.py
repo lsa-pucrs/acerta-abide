@@ -6,12 +6,13 @@
 Data preparation
 
 Usage:
-  nn.py [--folds=N] [--whole] [--male] [--threshold]
-  nn.py (-h | --help)
+  prepare_data.py [--folds=N] [--whole] [--male] [--threshold]
+  prepare_data.py (-h | --help)
 
 Options:
-  -h --help     Show this screen.
-  --folds=N     Number of folds [default: 10].
+  -h --help     Show this screen
+  --folds=N     Number of folds [default: 10]
+  --whole       Run model for the whole dataset
   --male        Run model for male subjects
   --threshold   Run model for thresholded subjects
 
