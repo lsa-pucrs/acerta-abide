@@ -148,16 +148,16 @@ if __name__ == "__main__":
     if arguments["--whole"]:
         print
         print "Preparing whole dataset"
-        prepare_folds(folds, pheno, output='./data/corr/corr_1D_cv_{fold}_{datatype}_whole.csv')
+        prepare_folds(folds, pheno, output='./data/corr/whole_{fold}_{datatype}.csv')
 
     if arguments["--male"]:
         print
         print "Preparing male dataset"
         pheno_male = pheno[pheno["SEX"] == "M"]
-        prepare_folds(folds, pheno_male, output='./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv')
+        prepare_folds(folds, pheno_male, output='./data/corr/male_{fold}_{datatype}.csv')
 
     if arguments["--threshold"]:
         print
         print "Preparing thresholded dataset"
         pheno_thresh = pheno[pheno["MEAN_FD"] <= 0.2]
-        prepare_folds(folds, pheno_thresh, output='./data/corr/corr_1D_cv_{fold}_{datatype}_thresh.csv')
+        prepare_folds(folds, pheno_thresh, output='./data/corr/threshold_{fold}_{datatype}.csv')

@@ -503,23 +503,23 @@ if __name__ == "__main__":
 
             reset()
 
-            run_ae1(fold, exp, model_path="./data/models/autoencoder-1-{fold}_{exp}.ckpt",
-                               data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_{exp}.csv",
+            run_ae1(fold, exp, model_path="./data/models/{exp}_{fold}_autoencoder-1_.ckpt",
+                               data_path="./data/corr/{exp}_{fold}_{datatype}.csv",
                                code_size=code_size_1)
 
             reset()
 
-            run_ae2(fold, exp, model_path="./data/models/autoencoder-2-{fold}_{exp}.ckpt",
-                               data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_{exp}.csv",
-                               prev_model_path="./data/models/autoencoder-1-{fold}_{exp}.ckpt",
+            run_ae2(fold, exp, model_path="./data/models/{exp}_{fold}_autoencoder-2.ckpt",
+                               data_path="./data/corr/{exp}_{fold}_{datatype}.csv",
+                               prev_model_path="./data/models/{exp}_{fold}_autoencoder-1.ckpt",
                                prev_code_size=code_size_1,
                                code_size=code_size_2)
 
             reset()
 
-            run_nn(fold, exp, model_path="./data/models/mlp-{fold}_{exp}.ckpt",
-                              data_path="./data/corr/corr_1D_cv_{fold}_{datatype}_{exp}.csv",
-                              prev_model_1_path="./data/models/autoencoder-1-{fold}_{exp}.ckpt",
-                              prev_model_2_path="./data/models/autoencoder-2-{fold}_{exp}.ckpt",
+            run_nn(fold, exp, model_path="./data/models/{exp}_{fold}_mlp.ckpt",
+                              data_path="./data/corr/{exp}_{fold}_{datatype}.csv",
+                              prev_model_1_path="./data/models/{exp}_{fold}_autoencoder-1.ckpt",
+                              prev_model_2_path="./data/models/{exp}_{fold}_autoencoder-2.ckpt",
                               code_size_1=code_size_1,
                               code_size_2=code_size_2)
