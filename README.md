@@ -26,7 +26,9 @@ nvidia-docker run --rm \
     python prepare_data.py \
         --whole \
         --male \
-        --threshold
+        --threshold \
+        --folds 10 \
+    2> /dev/null
 ```
 
 ## Model training
@@ -38,7 +40,9 @@ nvidia-docker run --rm \
     python nn.py \
         --whole \
         --male \
-        --threshold
+        --threshold \
+        --folds 10 \
+    2> /dev/null
 ```
 
 ## Model evaluation
@@ -50,5 +54,7 @@ nvidia-docker run --rm \
     python nn_evaluate.py \
         --whole \
         --male \
-        --threshold
+        --threshold \
+        --folds 10 \
+    2> /dev/null
 ```
