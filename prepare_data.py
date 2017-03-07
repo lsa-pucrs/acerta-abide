@@ -18,7 +18,6 @@ def compute_connectivity(functional):
 
 
 def load_patient(subj, tmpl):
-    print(subj)
     df = pd.read_csv(format_config(tmpl, {
         'subject': subj,
     }), sep="\t")
@@ -30,7 +29,7 @@ def load_patient(subj, tmpl):
     return subj, functional.tolist()
 
 
-def load_patients(subjs, tmpl, jobs=1):
+def load_patients(subjs, tmpl, jobs=10):
     partial_load_patient = partial(load_patient, tmpl=tmpl)
     msg = 'Done {current} of {total}'
     return dict(run_progress(partial_load_patient, subjs, message=msg, jobs=jobs))
@@ -72,45 +71,15 @@ def prepare_data(pheno, fold_idxs, derivatives_data, output):
         print
 
 
-def full_data(pheno, derivatives_data, output):
+def prepare_folds(folds, pheno, output):
 
-    name, ext = os.path.splitext(output)
-
-    features = []
-    classes = []
-    ids = []
-
-    for pid in derivatives_data:
-        features.append(derivatives_data[pid])
-        classes.append(pheno[pheno['FILE_ID'] == pid]['DX_GROUP'][0])
-        ids.append(pid)
-
-    features = np.array(features).astype(np.float32)
-    classes = np.array(classes).astype(int)
-    final = np.insert(features, 0, classes, axis=1)
-
-    np.savetxt(output, final, delimiter=',')
-    np.savetxt(name + '.ids' + ext, ids, delimiter=',', fmt="%s")
-
-
-if __name__ == "__main__":
-
-    SEED = 19
-    FOLDS = 10
-    download_it = False
-
-    pheno_path = './data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv'
-    pheno = load_phenotypes(pheno_path)
-
-    random.seed(SEED)
-
-    fold_idxs = [{'train': [], 'valid': [], 'test': []} for i in range(FOLDS)]
+    fold_idxs = [{'train': [], 'valid': [], 'test': []} for i in range(folds)]
     groups = pheno.groupby(('SITE_ID', 'DX_GROUP'))
     for group, data in groups:
 
         n = len(data)
-        fold_sizes = (n // FOLDS) * np.ones(FOLDS, dtype=np.int)
-        fold_sizes[:n % FOLDS] += 1
+        fold_sizes = (n // folds) * np.ones(folds, dtype=np.int)
+        fold_sizes[:n % folds] += 1
 
         random.shuffle(fold_sizes)
 
@@ -147,5 +116,22 @@ if __name__ == "__main__":
         print np.mean(means_perclass[0]), np.mean(means_perclass[1])
         print np.std(means_perclass[0]), np.std(means_perclass[1])
 
-        prepare_data(pheno, fold_idxs, derivatives_data, output='./data/corr/corr_1D_cv_{fold}_{datatype}.csv')
-        full_data(pheno, derivatives_data, output='./data/corr/corr_1D.csv')
+        prepare_data(pheno, fold_idxs, derivatives_data, output=output)
+
+
+if __name__ == "__main__":
+
+    random.seed(19)
+    np.random.seed(19)
+
+    FOLDS = 10
+    pheno_path = './data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv'
+    pheno = load_phenotypes(pheno_path)
+
+    # prepare_folds(FOLDS, pheno, output='./data/corr/corr_1D_cv_{fold}_{datatype}.csv')
+
+    # pheno_male = pheno[pheno["SEX"] == "M"]
+    # prepare_folds(FOLDS, pheno_male, output='./data/corr/corr_1D_cv_{fold}_{datatype}_male.csv')
+
+    pheno_thresh = pheno[pheno["MEAN_FD"] <= 0.2]
+    prepare_folds(FOLDS, pheno_thresh, output='./data/corr/corr_1D_cv_{fold}_{datatype}_thresh.csv')
