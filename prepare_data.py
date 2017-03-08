@@ -41,12 +41,16 @@ def compute_connectivity(functional):
 def load_patient(subj, tmpl):
     df = pd.read_csv(format_config(tmpl, {
         "subject": subj,
-    }), sep="\t")
+    }), sep="\t", header=0)
+    df = df.apply(lambda x: pd.to_numeric(x, errors='coerce'))
+
     ROIs = ["#" + str(y) for y in sorted([int(x[1:]) for x in df.keys().tolist()])]
-    functional = df[ROIs].as_matrix().T
+
+    functional = np.nan_to_num(df[ROIs].as_matrix().T)
     functional = preprocessing.scale(functional, axis=1)
     functional = compute_connectivity(functional)
     functional = functional.astype(np.float32)
+
     return subj, functional.tolist()
 
 
