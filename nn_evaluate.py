@@ -6,7 +6,7 @@
 Autoencoders evaluation.
 
 Usage:
-  nn_evaluate.py [--folds=N] [--whole] [--male] [--threshold] [<derivative> ...]
+  nn_evaluate.py [--folds=N] [--whole] [--male] [--threshold] [--mean] [<derivative> ...]
   nn_evaluate.py (-h | --help)
 
 Options:
@@ -15,6 +15,7 @@ Options:
   --whole       Run model for the whole dataset
   --male        Run model for male subjects
   --threshold   Run model for thresholded subjects
+  --mean        Show only the mean of folds
   derivative    Derivatives to process
 
 """
@@ -114,8 +115,15 @@ if __name__ == "__main__":
 
     cols = ["D", "Exp", "Fold", "Accuracy", "Precision", "Recall", "F-score", "Sensivity", "Specificity"]
     df = pd.DataFrame(results, columns=cols)
-    grouped = df.groupby(["Exp"])
+
+    grouped = df.groupby(["D", "Exp"])
     mean = grouped.agg(np.mean).reset_index()
     mean["Fold"] = "Mean"
+
     df = df.append(mean)
-    print df[cols].sort_values(["D", "Exp", "Fold"])
+    if arguments["--mean"]:
+        df = df[df["Fold"] == "Mean"]
+
+    print df[cols] \
+        .sort_values(["D", "Exp", "Fold"]) \
+        .reset_index()
