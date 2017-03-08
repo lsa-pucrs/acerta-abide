@@ -140,6 +140,28 @@ def nn(input_size, n_classes, layers, init=None):
     }
 
 
+def to_softmax(n_classes, classe):
+    sm = [0.0] * n_classes
+    sm[int(classe)] = 1.0
+    return sm
+
+
+def load_ae_encoder(input_size, code_size, model_path):
+    model = ae(input_size, code_size)
+    init = tf.global_variables_initializer()
+    try:
+        with tf.Session() as sess:
+            sess.run(init)
+            saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
+            if os.path.isfile(model_path):
+                print "Restoring", model_path
+                saver.restore(sess, model_path)
+            params = sess.run(model["params"])
+            return {"W_enc": params["W_enc"], "b_enc": params["b_enc"]}
+    finally:
+        reset()
+
+
 def sparsity_penalty(x, p, coeff):
     p_hat = tf.reduce_mean(tf.abs(x), 0)
     kl = p * tf.log(p / p_hat) + \
@@ -151,10 +173,15 @@ def run_ae1(config, model_path, data_path, code_size=1000):
 
     learning_rate = 0.0001
     training_iters = 700
-    sparse_p = 0.2
-    sparse_coeff = 0.5
     batch_size = 100
     n_classes = 2
+
+    sparse = True
+    sparse_p = 0.2
+    sparse_coeff = 0.5
+    corruption = 0.7
+    ae_enc = tf.nn.tanh
+    ae_dec = None
 
     model_path = format_config(model_path, config)
     train_path = format_config(data_path, config, {"datatype": "train"})
@@ -170,8 +197,9 @@ def run_ae1(config, model_path, data_path, code_size=1000):
     test_data = np.loadtxt(test_path, delimiter=",")
     test_X, test_y = test_data[:, 1:], test_data[:, 0]
 
-    model = ae(train_X.shape[1], code_size, corruption=0.7, enc=tf.nn.tanh, dec=None)
-    model["cost"] += sparsity_penalty(model["encode"], sparse_p, sparse_coeff)
+    model = ae(train_X.shape[1], code_size, corruption=corruption, enc=ae_enc, dec=ae_dec)
+    if sparse:
+        model["cost"] += sparsity_penalty(model["encode"], sparse_p, sparse_coeff)
 
     optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model["cost"])
 
@@ -270,8 +298,12 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
     batch_size = 10
     n_classes = 2
 
+    corruption = 0.9
+    ae_enc = tf.nn.tanh
+    ae_dec = None
+
     model_path = format_config(model_path, config)
-    model = ae(prev_code_size, code_size, corruption=0.9, enc=tf.nn.tanh, dec=None)
+    model = ae(prev_code_size, code_size, corruption=corruption, enc=ae_enc, dec=ae_dec)
 
     optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model["cost"])
 
@@ -334,28 +366,6 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
                 prev_costs = costs
             else:
                 print
-
-
-def to_softmax(n_classes, classe):
-    sm = [0.0] * n_classes
-    sm[int(classe)] = 1.0
-    return sm
-
-
-def load_ae_encoder(input_size, code_size, model_path):
-    model = ae(input_size, code_size)
-    init = tf.global_variables_initializer()
-    try:
-        with tf.Session() as sess:
-            sess.run(init)
-            saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
-            if os.path.isfile(model_path):
-                print "Restoring", model_path
-                saver.restore(sess, model_path)
-            params = sess.run(model["params"])
-            return {"W_enc": params["W_enc"], "b_enc": params["b_enc"]}
-    finally:
-        reset()
 
 
 def run_nn(config, model_path, data_path, prev_model_1_path, prev_model_2_path, code_size_1=1000, code_size_2=600):
