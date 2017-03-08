@@ -220,7 +220,12 @@ def run_ae1(config, model_path, data_path, code_size=1000):
 
             costs = costs.mean(axis=0)
             cost_train, cost_valid, cost_test = costs
-            print "Exp={:s}, Fold={:2d}, Model=ae1, Iter {:5d}, Cost= {:.6f} {:.6f} {:.6f}".format(exp, fold, epoch, cost_train, cost_valid, cost_test),
+            print format_config("D={derivative}, Exp={exp}, Fold={fold:2d}, Model=ae1, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}", config, {
+                "epoch": epoch,
+                "cost_train": cost_train,
+                "cost_valid": cost_valid,
+                "cost_test": cost_test,
+            }),
 
             if cost_valid < prev_costs[1]:
                 print "Saving better model"
@@ -315,7 +320,13 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
 
             costs = costs.mean(axis=0)
             cost_train, cost_valid, cost_test = costs
-            print "Exp={:s}, Fold={:2d}, Model=ae2, Iter {:5d}, Cost= {:.6f} {:.6f} {:.6f}".format(exp, fold, epoch, cost_train, cost_valid, cost_test),
+            print format_config("D={derivative}, Exp={exp}, Fold={fold:2d}, Model=ae2, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}", config, {
+                "epoch": epoch,
+                "cost_train": cost_train,
+                "cost_valid": cost_valid,
+                "cost_test": cost_test,
+            }),
+
 
             if cost_valid < prev_costs[1]:
                 print "Saving better model"
@@ -469,7 +480,7 @@ def run_nn(config, model_path, data_path, prev_model_1_path, prev_model_2_path, 
             accs = accs.mean(axis=0)
             acc_train, acc_valid, acc_test = accs
 
-            print format_config("D={derivative}, Exp={exp}, Fold={fold:2d}, Model=nn, Iter={epoch:5d}, Acc={acc_train:.6f} {acc_valid:.6f} {acc_test:.6f}, Momentum={momentum:.6f}", config, {
+            print format_config("D={derivative}, Exp={exp}, Fold={fold:2d}, Model=mlp, Iter={epoch:5d}, Acc={acc_train:.6f} {acc_valid:.6f} {acc_test:.6f}, Momentum={momentum:.6f}", config, {
                 "epoch": epoch,
                 "acc_train": acc_train,
                 "acc_valid": acc_valid,
