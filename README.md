@@ -2,62 +2,56 @@
 Deep learning using the ABIDE data
 
 ## Environment Setup
-In order to run the deep learning model, you need to install [docker](https://docs.docker.com/engine/getstarted/step_one/) and [nvidia-docker](https://github.com/NVIDIA/nvidia-docker).
+In order to run the deep learning model, you may want to install [docker](https://docs.docker.com/engine/getstarted/step_one/) and [nvidia-docker](https://github.com/NVIDIA/nvidia-docker) to an easy setup.
+
+If you want to install it directly in your machine, you need to install [CUDA 8.0](https://developer.nvidia.com/cuda-downloads) and the packages from `requirements.txt`:
+```bash
+pip install -r requirements.txt
+```
+
+## Running with Docker
+First, you need to build the project image: ```docker build -t acerta-abide .```
+Second, you need to start a container with this image, in order to execute the next steps: ```nvidia-docker run -it --rm -v $(realpath .):/opt/acerta-abide acerta-abide /bin/bash```
 
 ## Data preparation
 
 The first step is to download the dataset:
 
 ```bash
-nvidia-docker run -it --rm \
-    -v $(realpath data):/opt/acerta-abide/data \
-    acerta-abide \
-    python download_abide.py
+python download_abide.py
 ```
 
-This command will download the preprocessed CC-200 dataset from Amazon S3.
+This command will download the preprocessed datasets from Amazon S3.
 
 And compile the dataset into CV folds and by experiment.
 
 ```bash
-nvidia-docker run --rm \
-    -v $(realpath data):/opt/acerta-abide/data \
-    acerta-abide \
-    python prepare_data.py \
-        --whole \
-        --male \
-        --threshold \
-        --folds 10 \
-        cc200 \
-    2> /dev/null
+python prepare_data.py \
+    --whole \
+    --male \
+    --threshold \
+    --folds 10 \
+    cc200
 ```
 
 ## Model training
 
 ```bash
-nvidia-docker run --rm \
-    -v $(realpath data):/opt/acerta-abide/data \
-    acerta-abide \
-    python nn.py \
-        --whole \
-        --male \
-        --threshold \
-        --folds 10 \
-        cc200 \
-    2> /dev/null
+python nn.py \
+    --whole \
+    --male \
+    --threshold \
+    --folds 10 \
+    cc200
 ```
 
 ## Model evaluation
 
 ```bash
-nvidia-docker run --rm \
-    -v $(realpath data):/opt/acerta-abide/data \
-    acerta-abide \
-    python nn_evaluate.py \
-        --whole \
-        --male \
-        --threshold \
-        --folds 10 \
-        cc200 \
-    2> /dev/null
+python nn_evaluate.py \
+    --whole \
+    --male \
+    --threshold \
+    --folds 10 \
+    cc200 \
 ```
