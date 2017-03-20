@@ -53,5 +53,6 @@ python nn_evaluate.py \
     --male \
     --threshold \
     --folds 10 \
+    --mean
     cc200 \
 ```
