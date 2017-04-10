@@ -46,7 +46,7 @@ def load_patient(subj, tmpl):
 
     ROIs = ["#" + str(y) for y in sorted([int(x[1:]) for x in df.keys().tolist()])]
 
-    functional = np.nan_to_num(df[ROIs].as_matrix().T)
+    functional = np.nan_to_num(df[ROIs].as_matrix().T).tolist()
     functional = preprocessing.scale(functional, axis=1)
     functional = compute_connectivity(functional)
     functional = functional.astype(np.float32)
