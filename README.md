@@ -23,6 +23,19 @@ Just remember to always activate your separate environment before running the co
 source env/bin/activate
 ```
 
+### Tensorflow Quirks
+
+If you have multiple CUDA driver installations in your computer, you may also need to specify environment variables indicating where your preferred driver is installed as follows:
+```bash
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/<path/to>/cuda-8.0/targets/x86_64-linux/lib/
+```
+
+Tensorflow will also try to use all available GPUs (and memory) in your system, to prevent that, you need to [mask the other GPUs](http://acceleware.com/blog/cudavisibledevices-masking-gpus) using the ```CUDA_VISIBLE_DEVICES``` environment variable. Its parameter is a list of GPU IDs, where GPU ID is the number you see beside the GPU when you list them (e.g. using ```nvidia-smi```), so command:
+```bash
+export CUDA_VISIBLE_DEVICES=1
+```
+will only let Tensorflow see the second GPU available in your bus.
+
 ## Running with Docker
 First, you need to build the project image: ```docker build -t acerta-abide .```
 Second, you need to start a container with this image, in order to execute the next steps: ```nvidia-docker run -it --rm -v $(realpath .):/opt/acerta-abide acerta-abide /bin/bash```
@@ -67,6 +80,6 @@ python nn_evaluate.py \
     --male \
     --threshold \
     --folds 10 \
-    --mean
-    cc200 \
+    --mean \
+    cc200
 ```
