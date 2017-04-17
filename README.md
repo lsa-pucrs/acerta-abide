@@ -9,6 +9,20 @@ If you want to install it directly in your machine, you need to install [CUDA 8.
 pip install -r requirements.txt
 ```
 
+### Running with separate virtual environments
+
+You can also keep a separate set of python libraries to work with the code (if you are not root, or if you have multiple python set ups in the same machine) by running the following commands.
+```bash
+virtualenv env
+source env/bin/activate
+pip install -r requirements.txt
+```
+
+Just remember to always activate your separate environment before running the code by running
+```bash
+source env/bin/activate
+```
+
 ## Running with Docker
 First, you need to build the project image: ```docker build -t acerta-abide .```
 Second, you need to start a container with this image, in order to execute the next steps: ```nvidia-docker run -it --rm -v $(realpath .):/opt/acerta-abide acerta-abide /bin/bash```
