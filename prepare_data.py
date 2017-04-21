@@ -6,15 +6,16 @@
 Data preparation
 
 Usage:
-  prepare_data.py [--folds=N] [--whole] [--male] [--threshold] [<derivative> ...]
+  prepare_data.py [--folds=N] [--whole] [--male] [--threshold] [--leave-site-out] [<derivative> ...]
   prepare_data.py (-h | --help)
 
 Options:
   -h --help           Show this screen
   --folds=N           Number of folds [default: 10]
-  --whole             Run model for the whole dataset
-  --male              Run model for male subjects
-  --threshold         Run model for thresholded subjects
+  --whole             Prepare data of the whole dataset
+  --male              Prepare data of male subjects
+  --threshold         Prepare data of thresholded subjects
+  --leave-site-out    Prepare data using leave-site-out method
   derivative          Derivatives to process
 
 """
@@ -177,3 +178,15 @@ if __name__ == "__main__":
         print "Preparing thresholded dataset"
         pheno_thresh = pheno[pheno["MEAN_FD"] <= 0.2]
         prepare_folds(folds, pheno_thresh, derivatives, output="./data/corr/{derivative}_threshold_{fold}_{datatype}.csv")
+
+    if arguments["--leave-site-out"]:
+        print
+        print "Preparing leave-site-out dataset"
+        for site in pheno["SITE"].unique():
+            pheno_without_site = pheno[pheno["SITE"] != site]
+            prepare_folds(folds, pheno_without_site, derivatives, output=format_config(
+                "./data/corr/{derivative}_leavesiteout-{site}_{fold}_{datatype}.csv",
+                {
+                    "site": site,
+                })
+            )
