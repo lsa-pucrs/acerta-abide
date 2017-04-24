@@ -1,18 +1,27 @@
 #!/usr/bin/env python
 import os
-import sys
 import re
+import sys
+import h5py
 import time
+import random
+import string
+import contextlib
 import multiprocessing
 import pandas as pd
-import random
 import numpy as np
 import tensorflow as tf
-
 from model import ae
 
 identifier = '(([a-zA-Z]_)?([a-zA-Z0-9_]*))'
 replacement_field = '{' + identifier + '}'
+
+
+def reset():
+    tf.reset_default_graph()
+    random.seed(19)
+    np.random.seed(19)
+    tf.set_random_seed(19)
 
 
 def load_phenotypes(pheno_path):
@@ -24,10 +33,60 @@ def load_phenotypes(pheno_path):
     pheno['SEX'] = pheno['SEX'].apply(lambda v: {1: "M", 2: "F"}[v])
     pheno['MEAN_FD'] = pheno['func_mean_fd']
     pheno['SUB_IN_SMP'] = pheno['SUB_IN_SMP'].apply(lambda v: v == 1)
+    pheno["STRAT"] = pheno[["SITE_ID", "DX_GROUP"]].apply(lambda x: "_".join([str(s) for s in x]), axis=1)
 
     pheno.index = pheno['FILE_ID']
 
-    return pheno[['FILE_ID', 'DX_GROUP', 'SEX', 'SITE_ID', 'MEAN_FD', 'SUB_IN_SMP']]
+    return pheno[['FILE_ID', 'DX_GROUP', 'SEX', 'SITE_ID', 'MEAN_FD', 'SUB_IN_SMP', 'STRAT']]
+
+
+def hdf5_handler(filename, mode="r"):
+    h5py.File(filename, "a").close()
+    propfaid = h5py.h5p.create(h5py.h5p.FILE_ACCESS)
+    settings = list(propfaid.get_cache())
+    settings[1] = 0
+    settings[2] = 0
+    propfaid.set_cache(*settings)
+    with contextlib.closing(h5py.h5f.open(filename, fapl=propfaid)) as fid:
+        return h5py.File(fid, mode)
+
+
+def load_fold(patients, experiment, fold):
+
+    derivative = experiment.attrs["derivative"]
+
+    X_train = []
+    y_train = []
+    for pid in experiment[fold]["train"]:
+        X_train.append(np.array(patients[pid][derivative]))
+        y_train.append(patients[pid].attrs["y"])
+
+    X_valid = []
+    y_valid = []
+    for pid in experiment[fold]["valid"]:
+        X_valid.append(np.array(patients[pid][derivative]))
+        y_valid.append(patients[pid].attrs["y"])
+
+    X_test = []
+    y_test = []
+    for pid in experiment[fold]["test"]:
+        X_test.append(np.array(patients[pid][derivative]))
+        y_test.append(patients[pid].attrs["y"])
+
+    return np.array(X_train), y_train, \
+           np.array(X_valid), y_valid, \
+           np.array(X_test), y_test
+
+
+class SafeFormat(dict):
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+    def __getitem__(self, key):
+        if key not in self:
+            return self.__missing__(key)
+        return dict.__getitem__(self, key)
 
 
 def merge_dicts(*dict_args):
@@ -39,7 +98,7 @@ def merge_dicts(*dict_args):
 
 def format_config(s, *d):
     dd = merge_dicts(*d)
-    return s.format(**dd)
+    return string.Formatter().vformat(s, [], SafeFormat(dd))
 
 
 def elapsed_time(tstart):
@@ -121,10 +180,3 @@ def sparsity_penalty(x, p, coeff):
     kl = p * tf.log(p / p_hat) + \
         (1 - p) * tf.log((1 - p) / (1 - p_hat))
     return coeff * tf.reduce_sum(kl)
-
-
-def reset():
-    tf.reset_default_graph()
-    random.seed(19)
-    np.random.seed(19)
-    tf.set_random_seed(19)

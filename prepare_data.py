@@ -28,7 +28,8 @@ import numpy.ma as ma
 from docopt import docopt
 from functools import partial
 from sklearn import preprocessing
-from utils import (load_phenotypes, format_config, run_progress)
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from utils import (load_phenotypes, format_config, run_progress, hdf5_handler)
 
 
 def compute_connectivity(functional):
@@ -61,63 +62,30 @@ def load_patients(subjs, tmpl, jobs=10):
     return dict(run_progress(partial_load_patient, subjs, message=msg, jobs=jobs))
 
 
-def prepare_data(pheno, fold_idxs, derivative, func_data, output):
+def prepare_folds(hdf5, folds, pheno, derivatives, experiment):
+    exps = hdf5.require_group("experiments")
+    ids = pheno["FILE_ID"]
 
-    name, ext = os.path.splitext(output)
-
-    for fold, data in enumerate(fold_idxs):
-
-        for datatype in data:
-
-            features = []
-            classes = []
-            ids = []
-
-            for pid in data[datatype]:
-                features.append(func_data[pid])
-                classes.append(pheno[pheno["FILE_ID"] == pid]["DX_GROUP"][0])
-                ids.append(pid)
-
-            features = np.array(features).astype(np.float32)
-            classes = np.array(classes).astype(int)
-            final = np.insert(features, 0, classes, axis=1)
-
-            typename = format_config(name, {
-                "fold": str(fold+1),
-                "datatype": datatype,
+    for derivative in derivatives:
+        exp = exps.require_group(format_config(
+            experiment,
+            {
                 "derivative": derivative,
-            })
+            }
+        ))
 
-            np.savetxt(typename + ext, final, delimiter=",")
-            np.savetxt(typename + ".ids" + ext, ids, delimiter=",", fmt="%s")
+        exp.attrs["derivative"] = derivative
+
+        skf = StratifiedKFold(n_splits=folds, shuffle=True)
+        for i, (train_index, test_index) in enumerate(skf.split(ids, pheno["STRAT"])):
+            train_index, valid_index = train_test_split(train_index, test_size=0.33)
+            fold = exp.require_group(str(i))
+            fold["train"] = ids[train_index].tolist()
+            fold["valid"] = ids[valid_index].tolist()
+            fold["test"] = ids[test_index].tolist()
 
 
-def prepare_folds(folds, pheno, derivatives, output):
-
-    fold_idxs = [{"train": [], "valid": [], "test": []} for i in range(folds)]
-    groups = pheno.groupby(("SITE_ID", "DX_GROUP"))
-    for group, data in groups:
-
-        n = len(data)
-        fold_sizes = (n // folds) * np.ones(folds, dtype=np.int)
-        fold_sizes[:n % folds] += 1
-
-        random.shuffle(fold_sizes)
-
-        idxs = data["FILE_ID"].tolist()
-
-        current = 0
-        for fold, fold_size in enumerate(fold_sizes):
-            test = idxs[current:current+fold_size]
-            if current-fold_size < 0:
-                valid = idxs[current-fold_size:]
-            else:
-                valid = idxs[current-fold_size:current]
-            train = [idx for idx in idxs if idx not in test and idx not in valid]
-            fold_idxs[fold]["train"] = fold_idxs[fold]["train"] + train
-            fold_idxs[fold]["valid"] = fold_idxs[fold]["valid"] + valid
-            fold_idxs[fold]["test"] = fold_idxs[fold]["test"] + test
-            current = current + fold_size
+def load_patients_to_file(hdf5, pheno, derivatives):
 
     download_root = "./data/functionals"
     derivatives_path = {
@@ -129,24 +97,22 @@ def prepare_folds(folds, pheno, derivatives, output):
         "tt": "cpac/filt_global/rois_tt/{subject}_rois_tt.1D",
     }
 
+    storage = hdf5.require_group("patients")
     file_ids = pheno["FILE_ID"].tolist()
+
     for derivative in derivatives:
+
         file_template = os.path.join(download_root, derivatives_path[derivative])
-
-        means = []
-        means_perclass = [[], []]
         func_data = load_patients(file_ids, tmpl=file_template)
+
         for pid in func_data:
-            m = np.mean(func_data[pid])
-            means.append(m)
-            means_perclass[pheno[pheno["FILE_ID"] == pid]["DX_GROUP"][0]].append(m)
-
-        print "Class=All, Mean={:.6f}, Std={:.6f}".format(np.mean(means), np.std(means))
-        print "Class=ASD, Mean={:.6f}, Std={:.6f}".format(np.mean(means_perclass[0]), np.std(means_perclass[0]))
-        print "Class= TC, Mean={:.6f}, Std={:.6f}".format(np.mean(means_perclass[1]), np.std(means_perclass[1]))
-
-        prepare_data(pheno, fold_idxs, derivative, func_data, output=output)
-
+            record = pheno[pheno["FILE_ID"] == pid].iloc[0]
+            patient_storage = storage.require_group(pid)
+            patient_storage.attrs["id"] = record["FILE_ID"]
+            patient_storage.attrs["y"] = record["DX_GROUP"]
+            patient_storage.attrs["site"] = record["SITE_ID"]
+            patient_storage.attrs["sex"] = record["SEX"]
+            patient_storage.create_dataset(derivative, data=func_data[pid])
 
 if __name__ == "__main__":
 
@@ -159,33 +125,38 @@ if __name__ == "__main__":
     pheno_path = "./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv"
     pheno = load_phenotypes(pheno_path)
 
+    hdf5 = hdf5_handler("./data/abide.hdf5", "a")
+
     valid_derivatives = ["cc200", "aal", "ez", "ho", "tt", "dosenbach160"]
     derivatives = [derivative for derivative in arguments["<derivative>"] if derivative in valid_derivatives]
+
+    if "patients" not in hdf5:
+        load_patients_to_file(hdf5, pheno, derivatives)
 
     if arguments["--whole"]:
         print
         print "Preparing whole dataset"
-        prepare_folds(folds, pheno, derivatives, output="./data/corr/{derivative}_whole_{fold}_{datatype}.csv")
+        prepare_folds(hdf5, folds, pheno, derivatives, experiment="{derivative}_whole")
 
     if arguments["--male"]:
         print
         print "Preparing male dataset"
         pheno_male = pheno[pheno["SEX"] == "M"]
-        prepare_folds(folds, pheno_male, derivatives, output="./data/corr/{derivative}_male_{fold}_{datatype}.csv")
+        prepare_folds(hdf5, folds, pheno_male, derivatives, experiment="{derivative}_male")
 
     if arguments["--threshold"]:
         print
         print "Preparing thresholded dataset"
         pheno_thresh = pheno[pheno["MEAN_FD"] <= 0.2]
-        prepare_folds(folds, pheno_thresh, derivatives, output="./data/corr/{derivative}_threshold_{fold}_{datatype}.csv")
+        prepare_folds(hdf5, folds, pheno_thresh, derivatives, experiment="{derivative}_threshold")
 
     if arguments["--leave-site-out"]:
         print
         print "Preparing leave-site-out dataset"
-        for site in pheno["SITE"].unique():
-            pheno_without_site = pheno[pheno["SITE"] != site]
-            prepare_folds(folds, pheno_without_site, derivatives, output=format_config(
-                "./data/corr/{derivative}_leavesiteout-{site}_{fold}_{datatype}.csv",
+        for site in pheno["SITE_ID"].unique():
+            pheno_without_site = pheno[pheno["SITE_ID"] != site]
+            prepare_folds(hdf5, folds, pheno_without_site, derivatives, experiment=format_config(
+                "{derivative}_leavesiteout-{site}",
                 {
                     "site": site,
                 })

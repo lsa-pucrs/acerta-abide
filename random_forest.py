@@ -3,11 +3,11 @@
 
 """
 
-SVM evaluation.
+Random Forest evaluation.
 
 Usage:
-  svm.py [--whole] [--male] [--threshold] [--leave-site-out] [<derivative> ...]
-  svm.py (-h | --help)
+  random_forest.py [--whole] [--male] [--threshold] [--leave-site-out] [<derivative> ...]
+  random_forest.py (-h | --help)
 
 Options:
   -h --help           Show this screen
@@ -24,13 +24,13 @@ import numpy as np
 import tabulate
 from docopt import docopt
 from utils import (load_phenotypes, format_config, hdf5_handler, load_fold, reset)
-from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix
 
 
 def run(X_train, y_train, X_test, y_test):
 
-    clf = SVC()
+    clf = RandomForestClassifier(n_estimators=100)
     clf.fit(X_train, y_train)
     pred_y = clf.predict(X_test)
 
@@ -44,7 +44,7 @@ def run(X_train, y_train, X_test, y_test):
     return [accuracy, precision, recall, fscore, sensivity, specificity]
 
 
-def run_svm(hdf5, experiment):
+def run_rf(hdf5, experiment):
 
     exp_storage = hdf5["experiments"][experiment]
 
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     experiments = sorted(experiments)
     experiment_results = []
     for experiment in experiments:
-        results = run_svm(hdf5, experiment)
+        results = run_rf(hdf5, experiment)
         experiment_results += [[experiment] + results]
 
     print tabulate.tabulate(experiment_results,

@@ -6,16 +6,16 @@
 Autoencoders training and fine-tuning.
 
 Usage:
-  nn.py [--folds=N] [--whole] [--male] [--threshold] [<derivative> ...]
+  nn.py [--whole] [--male] [--threshold] [--leave-site-out] [<derivative> ...]
   nn.py (-h | --help)
 
 Options:
-  -h --help     Show this screen
-  --folds=N     Number of folds [default: 10]
-  --whole       Run model for the whole dataset
-  --male        Run model for male subjects
-  --threshold   Run model for thresholded subjects
-  derivative    Derivatives to process
+  -h --help           Show this screen
+  --whole             Run model for the whole dataset
+  --male              Run model for male subjects
+  --threshold         Run model for thresholded subjects
+  --leave-site-out    Prepare data using leave-site-out method
+  derivative          Derivatives to process
 
 """
 
@@ -23,11 +23,15 @@ import os
 import numpy as np
 import tensorflow as tf
 from docopt import docopt
-from utils import format_config, sparsity_penalty, reset, to_softmax, load_ae_encoder
+from utils import (load_phenotypes, format_config, hdf5_handler, load_fold,
+                   sparsity_penalty, reset, to_softmax, load_ae_encoder)
+
 from model import ae, nn
 
 
-def run_ae1(config, model_path, data_path, code_size=1000):
+def run_autoencoder1(experiment,
+                     X_train, y_train, X_valid, y_valid, X_test, y_test,
+                     model_path, code_size=1000):
     """
 
     Run the first autoencoder.
@@ -48,26 +52,12 @@ def run_ae1(config, model_path, data_path, code_size=1000):
     batch_size = 100
     n_classes = 2
 
-    # Get path for model and data
-    model_path = format_config(model_path, config)
-    train_path = format_config(data_path, config, {"datatype": "train"})
-    valid_path = format_config(data_path, config, {"datatype": "valid"})
-    test_path = format_config(data_path, config, {"datatype": "test"})
+    if os.path.isfile(model_path) or \
+       os.path.isfile(model_path + ".meta"):
+        return
 
-    # Load training data
-    train_data = np.loadtxt(train_path, delimiter=",")
-    train_X, train_y = train_data[:, 1:], train_data[:, 0]
-
-    # Load validation data
-    valid_data = np.loadtxt(valid_path, delimiter=",")
-    valid_X, valid_y = valid_data[:, 1:], valid_data[:, 0]
-
-    # Load test data
-    test_data = np.loadtxt(test_path, delimiter=",")
-    test_X, test_y = test_data[:, 1:], test_data[:, 0]
-
-    # Load model and add sparsity penalty (if requested)
-    model = ae(train_X.shape[1], code_size, corruption=corruption, enc=ae_enc, dec=ae_dec)
+    # Create model and add sparsity penalty (if requested)
+    model = ae(X_train.shape[1], code_size, corruption=corruption, enc=ae_enc, dec=ae_dec)
     if sparse:
         model["cost"] += sparsity_penalty(model["encode"], sparse_p, sparse_coeff)
 
@@ -88,7 +78,7 @@ def run_ae1(config, model_path, data_path, code_size=1000):
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(train_X) / batch_size)
+            batches = range(len(X_train) / batch_size)
             costs = np.zeros((len(batches), 3))
 
             for ib in batches:
@@ -98,7 +88,7 @@ def run_ae1(config, model_path, data_path, code_size=1000):
                 to_i = (ib + 1) * batch_size
 
                 # Select current batch
-                batch_xs, batch_ys = train_X[from_i:to_i], train_y[from_i:to_i]
+                batch_xs, batch_ys = X_train[from_i:to_i], y_train[from_i:to_i]
 
                 # Run optimization and retrieve training cost
                 _, cost_train = sess.run(
@@ -112,7 +102,7 @@ def run_ae1(config, model_path, data_path, code_size=1000):
                 cost_valid = sess.run(
                     model["cost"],
                     feed_dict={
-                        model["input"]: valid_X
+                        model["input"]: X_valid
                     }
                 )
 
@@ -120,7 +110,7 @@ def run_ae1(config, model_path, data_path, code_size=1000):
                 cost_test = sess.run(
                     model["cost"],
                     feed_dict={
-                        model["input"]: test_X
+                        model["input"]: X_test
                     }
                 )
 
@@ -132,9 +122,9 @@ def run_ae1(config, model_path, data_path, code_size=1000):
 
             # Pretty print training info
             print format_config(
-                "D={derivative}, Exp={exp}, Fold={fold:2d}, Model=ae1, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
-                config,
+                "Exp={experiment}, Model=ae1, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
                 {
+                    "experiment": experiment,
                     "epoch": epoch,
                     "cost_train": cost_train,
                     "cost_valid": cost_valid,
@@ -151,7 +141,10 @@ def run_ae1(config, model_path, data_path, code_size=1000):
                 print
 
 
-def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_code_size=1000):
+def run_autoencoder2(experiment,
+                     X_train, y_train, X_valid, y_valid, X_test, y_test,
+                     model_path, prev_model_path,
+                     code_size=600, prev_code_size=1000):
     """
 
     Run the second autoencoder.
@@ -160,26 +153,12 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
 
     """
 
-    # Get path for data
-    train_path = format_config(data_path, config, {"datatype": "train"})
-    valid_path = format_config(data_path, config, {"datatype": "valid"})
-    test_path = format_config(data_path, config, {"datatype": "test"})
-
-    # Load training data
-    train_data = np.loadtxt(train_path, delimiter=",")
-    train_X, train_y = train_data[:, 1:], train_data[:, 0]
-
-    # Load validation data
-    valid_data = np.loadtxt(valid_path, delimiter=",")
-    valid_X, valid_y = valid_data[:, 1:], valid_data[:, 0]
-
-    # Load test data
-    test_data = np.loadtxt(test_path, delimiter=",")
-    test_X, test_y = test_data[:, 1:], test_data[:, 0]
+    if os.path.isfile(model_path) or \
+       os.path.isfile(model_path + ".meta"):
+        return
 
     # Convert training, validation and test set to the new representation
-    prev_model_path = format_config(prev_model_path, config)
-    prev_model = ae(train_X.shape[1], prev_code_size,
+    prev_model = ae(X_train.shape[1], prev_code_size,
                     corruption=0.0,  # Disable corruption for conversion
                     enc=tf.nn.tanh, dec=None)
 
@@ -188,11 +167,10 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
         sess.run(init)
         saver = tf.train.Saver(prev_model["params"], write_version=tf.train.SaverDef.V2)
         if os.path.isfile(prev_model_path):
-            print "Restoring", prev_model_path
             saver.restore(sess, prev_model_path)
-        train_X = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: train_X})
-        valid_X = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: valid_X})
-        test_X = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: test_X})
+        X_train = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: X_train})
+        X_valid = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: X_valid})
+        X_test = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: X_test})
     del prev_model
 
     reset()
@@ -206,9 +184,6 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
     training_iters = 2000
     batch_size = 10
     n_classes = 2
-
-    # Get path for model
-    model_path = format_config(model_path, config)
 
     # Load model
     model = ae(prev_code_size, code_size, corruption=corruption, enc=ae_enc, dec=ae_dec)
@@ -231,7 +206,7 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(train_X) / batch_size)
+            batches = range(len(X_train) / batch_size)
             costs = np.zeros((len(batches), 3))
 
             for ib in batches:
@@ -241,7 +216,7 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
                 to_i = (ib + 1) * batch_size
 
                 # Select current batch
-                batch_xs, batch_ys = train_X[from_i:to_i], train_y[from_i:to_i]
+                batch_xs, batch_ys = X_train[from_i:to_i], y_train[from_i:to_i]
 
                 # Run optimization and retrieve training cost
                 _, cost_train = sess.run(
@@ -255,7 +230,7 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
                 cost_valid = sess.run(
                     model["cost"],
                     feed_dict={
-                        model["input"]: valid_X
+                        model["input"]: X_valid
                     }
                 )
 
@@ -263,7 +238,7 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
                 cost_test = sess.run(
                     model["cost"],
                     feed_dict={
-                        model["input"]: test_X
+                        model["input"]: X_test
                     }
                 )
 
@@ -275,9 +250,9 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
 
             # Pretty print training info
             print format_config(
-                "D={derivative}, Exp={exp}, Fold={fold:2d}, Model=ae2, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
-                config,
+                "Exp={experiment}, Model=ae2, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
                 {
+                    "experiment": experiment,
                     "epoch": epoch,
                     "cost_train": cost_train,
                     "cost_valid": cost_valid,
@@ -294,32 +269,15 @@ def run_ae2(config, model_path, data_path, prev_model_path, code_size=600, prev_
                 print
 
 
-def run_nn(config, model_path, data_path,
-           prev_model_1_path, prev_model_2_path,
-           code_size_1=1000, code_size_2=600):
+def run_finetuning(experiment,
+                   X_train, y_train, X_valid, y_valid, X_test, y_test,
+                   model_path, prev_model_1_path, prev_model_2_path,
+                   code_size_1=1000, code_size_2=600):
     """
 
     Run the pre-trained NN for fine-tuning, using first and second autoencoders' weights
 
     """
-
-    # Get path for model and data
-    model_path = format_config(model_path, config)
-    train_path = format_config(data_path, config, {"datatype": "train"})
-    valid_path = format_config(data_path, config, {"datatype": "valid"})
-    test_path = format_config(data_path, config, {"datatype": "test"})
-
-    # Load training data
-    train_data = np.loadtxt(train_path, delimiter=",")
-    train_X, train_y = train_data[:, 1:], train_data[:, 0]
-
-    # Load validation data
-    valid_data = np.loadtxt(valid_path, delimiter=",")
-    valid_X, valid_y = valid_data[:, 1:], valid_data[:, 0]
-
-    # Load test data
-    test_data = np.loadtxt(test_path, delimiter=",")
-    test_X, test_y = test_data[:, 1:], test_data[:, 0]
 
     # Hyperparameters
     learning_rate = 0.0005
@@ -334,19 +292,21 @@ def run_nn(config, model_path, data_path,
     batch_size = 10
     n_classes = 2
 
+    if os.path.isfile(model_path) or \
+       os.path.isfile(model_path + ".meta"):
+        return
+
     # Convert output to one-hot encoding
-    train_y = np.array([to_softmax(n_classes, y) for y in train_y])
-    valid_y = np.array([to_softmax(n_classes, y) for y in valid_y])
-    test_y = np.array([to_softmax(n_classes, y) for y in test_y])
+    y_train = np.array([to_softmax(n_classes, y) for y in y_train])
+    y_valid = np.array([to_softmax(n_classes, y) for y in y_valid])
+    y_test = np.array([to_softmax(n_classes, y) for y in y_test])
 
     # Load pretrained encoder weights
-    prev_model_1_path = format_config(prev_model_1_path, config)
-    prev_model_2_path = format_config(prev_model_2_path, config)
-    ae1 = load_ae_encoder(train_X.shape[1], code_size_1, prev_model_1_path)
+    ae1 = load_ae_encoder(X_train.shape[1], code_size_1, prev_model_1_path)
     ae2 = load_ae_encoder(code_size_1, code_size_2, prev_model_2_path)
 
     # Initialize NN model with the encoder weights
-    model = nn(train_X.shape[1], n_classes, [
+    model = nn(X_train.shape[1], n_classes, [
         {"size": code_size_1, "actv": tf.nn.tanh},
         {"size": code_size_2, "actv": tf.nn.tanh},
     ], [
@@ -381,7 +341,7 @@ def run_nn(config, model_path, data_path,
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(train_X) / batch_size)
+            batches = range(len(X_train) / batch_size)
             costs = np.zeros((len(batches), 3))
             accs = np.zeros((len(batches), 3))
 
@@ -400,7 +360,7 @@ def run_nn(config, model_path, data_path,
                 to_i = (ib + 1) * batch_size
 
                 # Select current batch
-                batch_xs, batch_ys = train_X[from_i:to_i], train_y[from_i:to_i]
+                batch_xs, batch_ys = X_train[from_i:to_i], y_train[from_i:to_i]
 
                 # Run optimization and retrieve training cost and accuracy
                 _, cost_train, acc_train = sess.run(
@@ -418,8 +378,8 @@ def run_nn(config, model_path, data_path,
                 cost_valid, acc_valid = sess.run(
                     [model["cost"], accuracy],
                     feed_dict={
-                        model["input"]: valid_X,
-                        model["expected"]: valid_y,
+                        model["input"]: X_valid,
+                        model["expected"]: y_valid,
                         model["dropouts"][0]: 1.0,
                         model["dropouts"][1]: 1.0,
                     }
@@ -429,8 +389,8 @@ def run_nn(config, model_path, data_path,
                 cost_test, acc_test = sess.run(
                     [model["cost"], accuracy],
                     feed_dict={
-                        model["input"]: test_X,
-                        model["expected"]: test_y,
+                        model["input"]: X_test,
+                        model["expected"]: y_test,
                         model["dropouts"][0]: 1.0,
                         model["dropouts"][1]: 1.0,
                     }
@@ -449,9 +409,9 @@ def run_nn(config, model_path, data_path,
 
             # Pretty print training info
             print format_config(
-                "D={derivative}, Exp={exp}, Fold={fold:2d}, Model=mlp, Iter={epoch:5d}, Acc={acc_train:.6f} {acc_valid:.6f} {acc_test:.6f}, Momentum={momentum:.6f}",
-                config,
+                "Exp={experiment}, Model=mlp, Iter={epoch:5d}, Acc={acc_train:.6f} {acc_valid:.6f} {acc_test:.6f}, Momentum={momentum:.6f}",
                 {
+                    "experiment": experiment,
                     "epoch": epoch,
                     "acc_train": acc_train,
                     "acc_valid": acc_valid,
@@ -466,11 +426,103 @@ def run_nn(config, model_path, data_path,
                 print "Saving better model"
                 saver.save(sess, model_path)
                 prev_accs = accs
+                prev_costs = costs
             else:
                 print
 
 
+def run_nn(hdf5, experiment, code_size_1, code_size_2):
+
+    exp_storage = hdf5["experiments"][experiment]
+
+    for fold in exp_storage:
+
+        experiment_cv = format_config("{experiment}_{fold}", {
+            "experiment": experiment,
+            "fold": fold,
+        })
+
+        X_train, y_train, \
+        X_valid, y_valid, \
+        X_test, y_test = load_fold(hdf5["patients"], exp_storage, fold)
+
+        ae1_model_path = format_config("./data/models/{experiment}_autoencoder-1.ckpt", {
+            "experiment": experiment_cv,
+        })
+        ae2_model_path = format_config("./data/models/{experiment}_autoencoder-2.ckpt", {
+            "experiment": experiment_cv,
+        })
+        nn_model_path = format_config("./data/models/{experiment}_mlp.ckpt", {
+            "experiment": experiment_cv,
+        })
+
+        reset()
+
+        # Run first autoencoder
+        run_autoencoder1(experiment_cv,
+                         X_train, y_train, X_valid, y_valid, X_test, y_test,
+                         model_path=ae1_model_path,
+                         code_size=code_size_1)
+
+        reset()
+
+        # Run second autoencoder
+        run_autoencoder2(experiment_cv,
+                         X_train, y_train, X_valid, y_valid, X_test, y_test,
+                         model_path=ae2_model_path,
+                         prev_model_path=ae1_model_path,
+                         prev_code_size=code_size_1,
+                         code_size=code_size_2)
+
+        reset()
+
+        # Run multilayer NN with pre-trained autoencoders
+        run_finetuning(experiment_cv,
+                       X_train, y_train, X_valid, y_valid, X_test, y_test,
+                       model_path=nn_model_path,
+                       prev_model_1_path=ae1_model_path,
+                       prev_model_2_path=ae2_model_path,
+                       code_size_1=code_size_1,
+                       code_size_2=code_size_2)
+
 if __name__ == "__main__":
+
+    reset()
+
+    arguments = docopt(__doc__)
+
+    pheno_path = "./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv"
+    pheno = load_phenotypes(pheno_path)
+
+    hdf5 = hdf5_handler("./data/abide.hdf5", "a")
+
+    valid_derivatives = ["cc200", "aal", "ez", "ho", "tt", "dosenbach160"]
+    derivatives = [derivative for derivative
+                   in arguments["<derivative>"]
+                   if derivative in valid_derivatives]
+
+    experiments = []
+
+    for derivative in derivatives:
+
+        config = {"derivative": derivative}
+
+        if arguments["--whole"]:
+            experiments += [format_config("{derivative}_whole", config)],
+
+        if arguments["--male"]:
+            experiments += [format_config("{derivative}_male", config)]
+
+        if arguments["--threshold"]:
+            experiments += [format_config("{derivative}_threshold", config)]
+
+        if arguments["--leave-site-out"]:
+            for site in pheno["SITE_ID"].unique():
+                site_config = {"site": site}
+                experiments += [
+                    format_config("{derivative}_leavesiteout-{site}",
+                                  config, site_config)
+                ]
 
     # First autoencoder bottleneck
     code_size_1 = 1000
@@ -478,62 +530,6 @@ if __name__ == "__main__":
     # Second autoencoder bottleneck
     code_size_2 = 600
 
-    # Parse parameters
-    arguments = docopt(__doc__)
-
-    experiments = []
-    if arguments["--whole"]:
-        experiments.append("whole")
-    if arguments["--male"]:
-        experiments.append("male")
-    if arguments["--threshold"]:
-        experiments.append("threshold")
-
-    maxfolds = int(arguments["--folds"]) + 1
-
-    valid_derivatives = ["cc200", "aal", "ez", "ho", "tt", "dosenbach160"]
-    derivatives = [derivative for derivative in arguments["<derivative>"] if derivative in valid_derivatives]
-
-    # Iterate through derivatives (parcellation methods) and
-    # experiments (sub-datasets, such as only male subjects)
-
-    for derivative in derivatives:
-
-        for exp in experiments:
-
-            for fold in range(1, maxfolds):
-
-                config = {
-                    "derivative": derivative,
-                    "fold": fold,
-                    "exp": exp
-                }
-
-                reset()
-
-                # Run first autoencoder
-                run_ae1(config,
-                        model_path="./data/models/{derivative}_{exp}_{fold}_autoencoder-1_.ckpt",
-                        data_path="./data/corr/{derivative}_{exp}_{fold}_{datatype}.csv",
-                        code_size=code_size_1)
-
-                reset()
-
-                # Run second autoencoder
-                run_ae2(config,
-                        model_path="./data/models/{derivative}_{exp}_{fold}_autoencoder-2.ckpt",
-                        data_path="./data/corr/{derivative}_{exp}_{fold}_{datatype}.csv",
-                        prev_model_path="./data/models/{derivative}_{exp}_{fold}_autoencoder-1.ckpt",
-                        prev_code_size=code_size_1,
-                        code_size=code_size_2)
-
-                reset()
-
-                # Run multilayer NN with pre-trained autoencoders
-                run_nn(config,
-                       model_path="./data/models/{derivative}_{exp}_{fold}_mlp.ckpt",
-                       data_path="./data/corr/{derivative}_{exp}_{fold}_{datatype}.csv",
-                       prev_model_1_path="./data/models/{derivative}_{exp}_{fold}_autoencoder-1.ckpt",
-                       prev_model_2_path="./data/models/{derivative}_{exp}_{fold}_autoencoder-2.ckpt",
-                       code_size_1=code_size_1,
-                       code_size_2=code_size_2)
+    experiments = sorted(experiments)
+    for experiment in experiments:
+        run_nn(hdf5, experiment, code_size_1, code_size_2)
