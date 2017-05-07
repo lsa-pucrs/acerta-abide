@@ -6,17 +6,16 @@
 Autoencoders evaluation.
 
 Usage:
-  nn_evaluate.py [--folds=N] [--whole] [--male] [--threshold] [--mean] [<derivative> ...]
+  nn_evaluate.py [--whole] [--male] [--threshold] [--leave-site-out] [<derivative> ...]
   nn_evaluate.py (-h | --help)
 
 Options:
-  -h --help     Show this screen
-  --folds=N     Number of folds [default: 10]
-  --whole       Run model for the whole dataset
-  --male        Run model for male subjects
-  --threshold   Run model for thresholded subjects
-  --mean        Show only the mean of folds
-  derivative    Derivatives to process
+  -h --help           Show this screen
+  --whole             Run model for the whole dataset
+  --male              Run model for male subjects
+  --threshold         Run model for thresholded subjects
+  --leave-site-out    Prepare data using leave-site-out method
+  derivative          Derivatives to process
 
 """
 
@@ -24,106 +23,142 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from docopt import docopt
-from nn import nn, to_softmax, reset
-from utils import format_config
+from nn import nn
+from utils import (load_phenotypes, format_config, hdf5_handler,
+                   reset, to_softmax, load_ae_encoder, load_fold)
 from sklearn.metrics import confusion_matrix
 
 
-def fold_results(config, model_path, data_path):
+def nn_results(hdf5, experiment, code_size_1, code_size_2):
+
+    exp_storage = hdf5["experiments"][experiment]
 
     n_classes = 2
 
-    model_path = format_config(model_path, config)
-    test_path = format_config(data_path, config, {"datatype": "test"})
+    results = []
 
-    test_data = np.loadtxt(test_path, delimiter=",")
-    test_X, test_y = test_data[:, 1:], test_data[:, 0]
-    test_y = np.array([to_softmax(n_classes, y) for y in test_y])
+    for fold in exp_storage:
 
-    try:
+        experiment_cv = format_config("{experiment}_{fold}", {
+            "experiment": experiment,
+            "fold": fold,
+        })
 
-        model = nn(test_X.shape[1], n_classes, [
-            {"size": 1000, "actv": tf.nn.tanh},
-            {"size": 600, "actv": tf.nn.tanh},
-        ])
+        X_train, y_train, \
+        X_valid, y_valid, \
+        X_test, y_test = load_fold(hdf5["patients"], exp_storage, fold)
 
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
+        y_test = np.array([to_softmax(n_classes, y) for y in y_test])
 
-            sess.run(init)
+        ae1_model_path = format_config("./data/models/{experiment}_autoencoder-1.ckpt", {
+            "experiment": experiment_cv,
+        })
+        ae2_model_path = format_config("./data/models/{experiment}_autoencoder-2.ckpt", {
+            "experiment": experiment_cv,
+        })
+        nn_model_path = format_config("./data/models/{experiment}_mlp.ckpt", {
+            "experiment": experiment_cv,
+        })
 
-            saver = tf.train.Saver(model["params"])
-            saver.restore(sess, model_path)
+        try:
 
-            output = sess.run(
-                model["output"],
-                feed_dict={
-                    model["input"]: test_X,
-                    model["dropouts"][0]: 1.0,
-                    model["dropouts"][1]: 1.0,
-                }
-            )
+            model = nn(X_test.shape[1], n_classes, [
+                {"size": 1000, "actv": tf.nn.tanh},
+                {"size": 600, "actv": tf.nn.tanh},
+            ])
 
-            y_pred = np.argmax(output, axis=1)
-            y_true = np.argmax(test_y, axis=1)
+            init = tf.global_variables_initializer()
+            with tf.Session() as sess:
 
-            [[TN, FP], [FN, TP]] = confusion_matrix(y_true, y_pred, labels=[0, 1]).astype(float)
-            accuracy = (TP+TN)/(TP+TN+FP+FN)
-            specificity = TN/(FP+TN)
-            precision = TP/(TP+FP)
-            sensivity = recall = TP/(TP+FN)
-            fscore = 2*TP/(2*TP+FP+FN)
+                sess.run(init)
 
-            return [accuracy, precision, recall, fscore, sensivity, specificity]
-    finally:
-        reset()
+                saver = tf.train.Saver(model["params"])
+                saver.restore(sess, nn_model_path)
+
+                output = sess.run(
+                    model["output"],
+                    feed_dict={
+                        model["input"]: X_test,
+                        model["dropouts"][0]: 1.0,
+                        model["dropouts"][1]: 1.0,
+                    }
+                )
+
+                print(output)
+
+                y_pred = np.argmax(output, axis=1)
+                y_true = np.argmax(y_test, axis=1)
+
+                [[TN, FP], [FN, TP]] = confusion_matrix(y_true, y_pred, labels=[0, 1]).astype(float)
+                accuracy = (TP+TN)/(TP+TN+FP+FN)
+                specificity = TN/(FP+TN)
+                precision = TP/(TP+FP)
+                sensivity = recall = TP/(TP+FN)
+                fscore = 2*TP/(2*TP+FP+FN)
+
+                results.append([accuracy, precision, recall, fscore, sensivity, specificity])
+        finally:
+            reset()
+
+    return [experiment] + np.mean(results, axis=0).tolist()
 
 if __name__ == "__main__":
 
+    reset()
+
     arguments = docopt(__doc__)
-
-    experiments = []
-    if arguments["--whole"]:
-        experiments.append("whole")
-    if arguments["--male"]:
-        experiments.append("male")
-    if arguments["--threshold"]:
-        experiments.append("threshold")
-
-    maxfolds = int(arguments["--folds"]) + 1
 
     pd.set_option("display.expand_frame_repr", False)
 
+    pheno_path = "./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv"
+    pheno = load_phenotypes(pheno_path)
+
+    hdf5 = hdf5_handler("./data/abide.hdf5", "a")
+
     valid_derivatives = ["cc200", "aal", "ez", "ho", "tt", "dosenbach160"]
-    derivatives = [derivative for derivative in arguments["<derivative>"] if derivative in valid_derivatives]
+    derivatives = [derivative for derivative
+                   in arguments["<derivative>"]
+                   if derivative in valid_derivatives]
+
+    experiments = []
+
+    for derivative in derivatives:
+
+        config = {"derivative": derivative}
+
+        if arguments["--whole"]:
+            experiments += [format_config("{derivative}_whole", config)],
+
+        if arguments["--male"]:
+            experiments += [format_config("{derivative}_male", config)]
+
+        if arguments["--threshold"]:
+            experiments += [format_config("{derivative}_threshold", config)]
+
+        if arguments["--leave-site-out"]:
+            for site in pheno["SITE_ID"].unique():
+                site_config = {"site": site}
+                experiments += [
+                    format_config("{derivative}_leavesiteout-{site}",
+                                  config, site_config)
+                ]
+
+    # First autoencoder bottleneck
+    code_size_1 = 1000
+
+    # Second autoencoder bottleneck
+    code_size_2 = 600
 
     results = []
-    for derivative in derivatives:
-        for exp in experiments:
-            for fold in range(1, maxfolds):
 
-                config = {
-                    "derivative": derivative,
-                    "fold": fold,
-                    "exp": exp
-                }
+    experiments = sorted(experiments)
+    for experiment in experiments:
+        results.append(nn_results(hdf5, experiment, code_size_1, code_size_2))
 
-                results.append([derivative, exp, fold] +
-                               fold_results(config,
-                                            "./data/models/{derivative}_{exp}_{fold}_mlp.ckpt",
-                                            "./data/corr/{derivative}_{exp}_{fold}_{datatype}.csv"))
-
-    cols = ["D", "Exp", "Fold", "Accuracy", "Precision", "Recall", "F-score", "Sensivity", "Specificity"]
+    cols = ["Exp", "Accuracy", "Precision", "Recall", "F-score",
+            "Sensivity", "Specificity"]
     df = pd.DataFrame(results, columns=cols)
 
-    grouped = df.groupby(["D", "Exp"])
-    mean = grouped.agg(np.mean).reset_index()
-    mean["Fold"] = "Mean"
-
-    df = df.append(mean)
-    if arguments["--mean"]:
-        df = df[df["Fold"] == "Mean"]
-
     print df[cols] \
-        .sort_values(["D", "Exp", "Fold"]) \
+        .sort_values(["Exp"]) \
         .reset_index()
