@@ -1,4 +1,4 @@
-# acerta-abide
+# ACERTA ABIDE [![DOI](https://zenodo.org/badge/70092435.svg)](https://zenodo.org/badge/latestdoi/70092435)
 Deep learning using the ABIDE data
 
 ## Environment Setup
