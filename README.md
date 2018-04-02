@@ -1,5 +1,5 @@
 # ACERTA ABIDE [![DOI](https://zenodo.org/badge/38068726.svg)](https://zenodo.org/badge/latestdoi/38068726)
-Deep learning using the ABIDE data
+Deep learning using the [ABIDE data](http://fcon_1000.projects.nitrc.org/indi/abide/)
 
 ## Environment Setup
 In order to run the deep learning model, you may want to install [docker](https://docs.docker.com/engine/getstarted/step_one/) and [nvidia-docker](https://github.com/NVIDIA/nvidia-docker) to an easy setup.
