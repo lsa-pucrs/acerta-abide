@@ -59,7 +59,7 @@ if __name__ == "__main__":
     pipeline = "cpac"
     strategy = "filt_global"
 
-    out_dir = os.path.abspath(r"E:\ABIDE")  # os.path.abspath("data/functionals/cpac/filt_global/")
+    out_dir = os.path.abspath("data/functionals/cpac/filt_global/")
 
     for derivative in derivatives:
         collect_and_download(derivative, pipeline, strategy, os.path.join(out_dir, derivative))
