@@ -3,6 +3,7 @@
 
 import os
 import urllib
+import urllib.request
 
 
 def collect_and_download(derivative, pipeline, strategy, out_dir):
@@ -45,11 +46,11 @@ def collect_and_download(derivative, pipeline, strategy, out_dir):
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
         if not os.path.exists(download_file):
-            print "Retrieving: %s" % download_file
-            urllib.urlretrieve(s3_path, download_file)
-            print "%.3f%% percent complete" % (100*(float(path_idx+1)/total_num_files))
+            print ("Retrieving: %s" % download_file)
+            urllib.request.urlretrieve(s3_path, download_file)
+            print ("%.3f%% percent complete" % (100*(float(path_idx+1)/total_num_files)))
         else:
-            print "File %s already exists, skipping..." % download_file
+            print ("File %s already exists, skipping..." % download_file)
 
 
 if __name__ == "__main__":
