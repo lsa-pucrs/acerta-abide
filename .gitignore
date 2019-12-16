@@ -57,6 +57,7 @@ docs/_build/
 target/
 
 # Datasets
+data/abide.hdf5
 data/models/*
 data/corr/*
 data/functionals/*

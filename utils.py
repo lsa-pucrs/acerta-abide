@@ -18,10 +18,10 @@ replacement_field = '{' + identifier + '}'
 
 
 def reset():
-    tf.reset_default_graph()
+    tf.compat.v1.reset_default_graph()
     random.seed(19)
     np.random.seed(19)
-    tf.set_random_seed(19)
+    tf.compat.v1.set_random_seed(19)
 
 
 def load_phenotypes(pheno_path):
@@ -47,7 +47,7 @@ def hdf5_handler(filename, mode="r"):
     settings[1] = 0
     settings[2] = 0
     propfaid.set_cache(*settings)
-    with contextlib.closing(h5py.h5f.open(filename, fapl=propfaid)) as fid:
+    with contextlib.closing(h5py.h5f.open(bytes(filename,encoding="utf-8"), fapl=propfaid)) as fid:
         return h5py.File(fid, mode)
 
 
@@ -113,7 +113,7 @@ def run_progress(callable_func, items, message=None, jobs=1):
 
     results = []
 
-    print 'Starting pool of %d jobs' % jobs
+    print('Starting pool of %d jobs' % jobs)
 
     current = 0
     total = len(items)
@@ -145,7 +145,7 @@ def run_progress(callable_func, items, message=None, jobs=1):
         pool.close()
         pool.join()
 
-    print
+    print()
     return results
 
 
@@ -161,13 +161,13 @@ def to_softmax(n_classes, classe):
 
 def load_ae_encoder(input_size, code_size, model_path):
     model = ae(input_size, code_size)
-    init = tf.global_variables_initializer()
+    init = tf.compat.v1.global_variables_initializer()
     try:
-        with tf.Session() as sess:
+        with tf.compat.v1.Session() as sess:
             sess.run(init)
-            saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
+            saver = tf.compat.v1.train.Saver(model["params"], write_version=tf.compat.v1.train.SaverDef.V2)
             if os.path.isfile(model_path):
-                print "Restoring", model_path
+                print("Restoring", model_path)
                 saver.restore(sess, model_path)
             params = sess.run(model["params"])
             return {"W_enc": params["W_enc"], "b_enc": params["b_enc"]}
@@ -177,6 +177,6 @@ def load_ae_encoder(input_size, code_size, model_path):
 
 def sparsity_penalty(x, p, coeff):
     p_hat = tf.reduce_mean(tf.abs(x), 0)
-    kl = p * tf.log(p / p_hat) + \
-        (1 - p) * tf.log((1 - p) / (1 - p_hat))
+    kl = p * tf.math.log(p / p_hat) + \
+        (1 - p) * tf.math.log((1 - p) / (1 - p_hat))
     return coeff * tf.reduce_sum(kl)

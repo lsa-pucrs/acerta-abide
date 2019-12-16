@@ -16,15 +16,23 @@ def ae(input_size, code_size,
     """
 
     # Define data input placeholder
-    x = tf.placeholder(tf.float32, [None, input_size])
+    x = tf.compat.v1.placeholder(tf.float32, [None, input_size])
 
     if corruption > 0.0:
 
         # Corrupt data based on random sampling
-        _x = tf.multiply(x, tf.cast(tf.random_uniform(shape=tf.shape(x),
-                                                      minval=0,
-                                                      maxval=1 - corruption,
-                                                      dtype=tf.float32), tf.float32))
+        _x = tf.multiply(
+            x,
+            tf.cast(
+                tf.random.uniform(
+                    shape=tf.shape(x),
+                    minval=0,
+                    maxval=1 - corruption,
+                    dtype=tf.float32
+                ),
+                tf.float32
+            )
+        )
 
     else:
         _x = x
@@ -33,11 +41,11 @@ def ae(input_size, code_size,
     b_enc = tf.Variable(tf.zeros([code_size]))
 
     # Initialize encoder weights using Glorot method
-    W_enc = tf.Variable(tf.random_uniform(
-                [input_size, code_size],
-                -6.0 / math.sqrt(input_size + code_size),
-                6.0 / math.sqrt(input_size + code_size))
-            )
+    W_enc = tf.Variable(tf.random.uniform(
+        [input_size, code_size],
+        -6.0 / math.sqrt(input_size + code_size),
+        6.0 / math.sqrt(input_size + code_size)
+    ))
 
     # Compute activation for encoding
     encode = tf.matmul(_x, W_enc) + b_enc
@@ -54,11 +62,11 @@ def ae(input_size, code_size,
     else:
 
         # Initialize decoder weights using Glorot method
-        W_dec = tf.Variable(tf.random_uniform(
-                    [code_size, input_size],
-                    -6.0 / math.sqrt(code_size + input_size),
-                    6.0 / math.sqrt(code_size + input_size))
-                )
+        W_dec = tf.Variable(tf.random.uniform(
+            [code_size, input_size],
+            -6.0 / math.sqrt(code_size + input_size),
+            6.0 / math.sqrt(code_size + input_size)
+        ))
 
     # Compute activation for decoding
     decode = tf.matmul(encode, W_dec) + b_dec
@@ -104,10 +112,10 @@ def nn(input_size, n_classes, layers, init=None):
     """
 
     # Define data input placeholder
-    input = x = tf.placeholder(tf.float32, [None, input_size])
+    input = x = tf.compat.v1.placeholder(tf.float32, [None, input_size])
 
     # Define expected output placeholder
-    y = tf.placeholder("float", [None, n_classes])
+    y = tf.compat.v1.placeholder("float", [None, n_classes])
 
     actvs = []
     dropouts = []
@@ -115,7 +123,7 @@ def nn(input_size, n_classes, layers, init=None):
     for i, layer in enumerate(layers):
 
         # Define dropout placeholder
-        dropout = tf.placeholder(tf.float32)
+        dropout = tf.compat.v1.placeholder(tf.float32)
 
         if init is None:
 
@@ -135,7 +143,7 @@ def nn(input_size, n_classes, layers, init=None):
             x = layer["actv"](x)
 
         # Compute layer dropout
-        x = tf.nn.dropout(x, dropout)
+        x = tf.nn.dropout(x, rate=1-dropout)
 
         # Store parameters
         params.update({
@@ -148,10 +156,11 @@ def nn(input_size, n_classes, layers, init=None):
         input_size = layer["size"]
 
     # Initialize output weights
-    W = tf.Variable(tf.random_uniform(
-            [input_size, n_classes],
-            -3.0 / math.sqrt(input_size + n_classes),
-            3.0 / math.sqrt(input_size + n_classes)))
+    W = tf.Variable(tf.random.uniform(
+        [input_size, n_classes],
+        -3.0 / math.sqrt(input_size + n_classes),
+        3.0 / math.sqrt(input_size + n_classes)
+    ))
     b = tf.Variable(tf.zeros([n_classes]))
 
     # Compute logits output
@@ -173,7 +182,7 @@ def nn(input_size, n_classes, layers, init=None):
         "output": tf.nn.softmax(y_hat),
 
         # Cost function: cross-entropy
-        "cost": tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_hat, labels=y)),
+        "cost": tf.reduce_mean(tf.compat.v1.nn.softmax_cross_entropy_with_logits_v2(logits=y_hat, labels=y)),
 
         # Droupout placeholders
         "dropouts": dropouts,

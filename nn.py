@@ -21,6 +21,7 @@ Options:
 
 import os
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 from docopt import docopt
 from utils import (load_phenotypes, format_config, hdf5_handler, load_fold,
@@ -28,10 +29,22 @@ from utils import (load_phenotypes, format_config, hdf5_handler, load_fold,
 
 from model import ae, nn
 
+from itertools import product
 
-def run_autoencoder1(experiment,
-                     X_train, y_train, X_valid, y_valid, X_test, y_test,
-                     model_path, code_size=1000):
+
+def run_autoencoder1(
+    experiment,
+    X_train, y_train, X_valid, y_valid, X_test, y_test,
+    model_path, code_size=1000,
+
+    # Hyperparameters
+    learning_rate=0.0001,
+    sparse_p=0.2,
+    sparse_coeff=0.5,
+    corruption=0.7,
+    training_iters=500,
+    batch_size=100,
+):
     """
 
     Run the first autoencoder.
@@ -39,17 +52,8 @@ def run_autoencoder1(experiment,
 
     """
 
-    # Hyperparameters
-    learning_rate = 0.0001
-    sparse = True  # Add sparsity penalty
-    sparse_p = 0.2
-    sparse_coeff = 0.5
-    corruption = 0.7  # Data corruption ratio for denoising
     ae_enc = tf.nn.tanh  # Tangent hyperbolic
     ae_dec = None  # Linear activation
-
-    training_iters = 700
-    batch_size = 100
     n_classes = 2
 
     if os.path.isfile(model_path) or \
@@ -58,19 +62,19 @@ def run_autoencoder1(experiment,
 
     # Create model and add sparsity penalty (if requested)
     model = ae(X_train.shape[1], code_size, corruption=corruption, enc=ae_enc, dec=ae_dec)
-    if sparse:
+    if sparse_coeff > 0.0:
         model["cost"] += sparsity_penalty(model["encode"], sparse_p, sparse_coeff)
 
     # Use GD for optimization of model cost
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model["cost"])
+    optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate).minimize(model["cost"])
 
     # Initialize Tensorflow session
-    init = tf.global_variables_initializer()
-    with tf.Session() as sess:
+    init = tf.compat.v1.global_variables_initializer()
+    with tf.compat.v1.Session() as sess:
         sess.run(init)
 
         # Define model saver
-        saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
+        saver = tf.compat.v1.train.Saver(model["params"], write_version=tf.compat.v1.train.SaverDef.V2)
 
         # Initialize with an absurd cost for model selection
         prev_costs = np.array([9999999999] * 3)
@@ -78,7 +82,7 @@ def run_autoencoder1(experiment,
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(X_train) / batch_size)
+            batches = range(int(len(X_train) / batch_size))
             costs = np.zeros((len(batches), 3))
 
             for ib in batches:
@@ -121,7 +125,7 @@ def run_autoencoder1(experiment,
             cost_train, cost_valid, cost_test = costs
 
             # Pretty print training info
-            print format_config(
+            print(format_config(
                 "Exp={experiment}, Model=ae1, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
                 {
                     "experiment": experiment,
@@ -130,21 +134,29 @@ def run_autoencoder1(experiment,
                     "cost_valid": cost_valid,
                     "cost_test": cost_test,
                 }
-            ),
+            ), end=' ')
 
             # Save better model if optimization achieves a lower cost
             if cost_valid < prev_costs[1]:
-                print "Saving better model"
+                print("Saving better model")
                 saver.save(sess, model_path)
                 prev_costs = costs
             else:
-                print
+                print()
 
 
-def run_autoencoder2(experiment,
-                     X_train, y_train, X_valid, y_valid, X_test, y_test,
-                     model_path, prev_model_path,
-                     code_size=600, prev_code_size=1000):
+def run_autoencoder2(
+    experiment,
+    X_train, y_train, X_valid, y_valid, X_test, y_test,
+    model_path, prev_model_path,
+    code_size=600, prev_code_size=1000,
+
+    # Hyperparameters
+    learning_rate=0.0001,
+    corruption=0.9,
+    training_iters=7000,
+    batch_size=10
+):
     """
 
     Run the second autoencoder.
@@ -162,42 +174,35 @@ def run_autoencoder2(experiment,
                     corruption=0.0,  # Disable corruption for conversion
                     enc=tf.nn.tanh, dec=None)
 
-    init = tf.global_variables_initializer()
-    with tf.Session() as sess:
+    init = tf.compat.v1.global_variables_initializer()
+    with tf.compat.v1.Session() as sess:
         sess.run(init)
-        saver = tf.train.Saver(prev_model["params"], write_version=tf.train.SaverDef.V2)
+        saver = tf.compat.v1.train.Saver(prev_model["params"], write_version=tf.compat.v1.train.SaverDef.V2)
         if os.path.isfile(prev_model_path):
             saver.restore(sess, prev_model_path)
         X_train = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: X_train})
         X_valid = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: X_valid})
         X_test = sess.run(prev_model["encode"], feed_dict={prev_model["input"]: X_test})
     del prev_model
-
     reset()
 
-    # Hyperparameters
-    learning_rate = 0.0001
-    corruption = 0.9
     ae_enc = tf.nn.tanh
     ae_dec = None
-
-    training_iters = 2000
-    batch_size = 10
     n_classes = 2
 
     # Load model
     model = ae(prev_code_size, code_size, corruption=corruption, enc=ae_enc, dec=ae_dec)
 
     # Use GD for optimization of model cost
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(model["cost"])
+    optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate).minimize(model["cost"])
 
     # Initialize Tensorflow session
-    init = tf.global_variables_initializer()
-    with tf.Session() as sess:
+    init = tf.compat.v1.global_variables_initializer()
+    with tf.compat.v1.Session() as sess:
         sess.run(init)
 
         # Define model saver
-        saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
+        saver = tf.compat.v1.train.Saver(model["params"], write_version=tf.compat.v1.train.SaverDef.V2)
 
         # Initialize with an absurd cost for model selection
         prev_costs = np.array([9999999999] * 3)
@@ -206,7 +211,7 @@ def run_autoencoder2(experiment,
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(X_train) / batch_size)
+            batches = range(int(len(X_train) / batch_size))
             costs = np.zeros((len(batches), 3))
 
             for ib in batches:
@@ -249,7 +254,7 @@ def run_autoencoder2(experiment,
             cost_train, cost_valid, cost_test = costs
 
             # Pretty print training info
-            print format_config(
+            print(format_config(
                 "Exp={experiment}, Model=ae2, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
                 {
                     "experiment": experiment,
@@ -258,39 +263,120 @@ def run_autoencoder2(experiment,
                     "cost_valid": cost_valid,
                     "cost_test": cost_test,
                 }
-            ),
+            ), end=' ')
 
             # Save better model if optimization achieves a lower cost
             if cost_valid < prev_costs[1]:
-                print "Saving better model"
+                print("Saving better model")
                 saver.save(sess, model_path)
                 prev_costs = costs
             else:
-                print
+                print()
 
 
-def run_finetuning(experiment,
-                   X_train, y_train, X_valid, y_valid, X_test, y_test,
-                   model_path, prev_model_1_path, prev_model_2_path,
-                   code_size_1=1000, code_size_2=600):
+def run_finetuning(
+    experiment,
+    X_train, y_train, X_valid, y_valid, X_test, y_test,
+    model_path, prev_model_1_path, prev_model_2_path,
+    code_size_1=1000, code_size_2=600,
+
+    # Hyperparameters
+    learning_rate=0.0005,
+    dropout_1=0.6,
+    dropout_2=0.8,
+    initial_momentum=0.1,
+    final_momentum=0.9,
+    saturate_momentum=100,
+    training_iters=1000,
+    batch_size=10
+):
     """
 
     Run the pre-trained NN for fine-tuning, using first and second autoencoders' weights
 
     """
 
-    # Hyperparameters
-    learning_rate = 0.0005
-    dropout_1 = 0.6
-    dropout_2 = 0.8
-    initial_momentum = 0.1
-    final_momentum = 0.9  # Increase momentum along epochs to avoid fluctiations
-    saturate_momentum = 100
+    if any(
+        type(hp) == list
+        for hp in [
+            learning_rate,
+            dropout_1,
+            dropout_2,
+            initial_momentum,
+            final_momentum,
+            saturate_momentum,
+            training_iters,
+            batch_size,
+        ]
+    ):
 
-    training_iters = 100
+        ensure_list = lambda hp: [hp] if type(hp) != list else hp
+
+        learning_rate = ensure_list(learning_rate)
+        dropout_1 = ensure_list(dropout_1)
+        dropout_2 = ensure_list(dropout_2)
+        initial_momentum = ensure_list(initial_momentum)
+        final_momentum = ensure_list(final_momentum)
+        saturate_momentum = ensure_list(saturate_momentum)
+        training_iters = ensure_list(training_iters)
+        batch_size = ensure_list(batch_size)
+
+        for (
+            learning_rate_val,
+            dropout_1_val,
+            dropout_2_val,
+            initial_momentum_val,
+            final_momentum_val,
+            saturate_momentum_val,
+            training_iters_val,
+            batch_size_val,
+        ) in product(
+            learning_rate,
+            dropout_1,
+            dropout_2,
+            initial_momentum,
+            final_momentum,
+            saturate_momentum,
+            training_iters,
+            batch_size,
+        ):
+
+            run_finetuning(
+                experiment,
+                X_train, y_train, X_valid, y_valid, X_test, y_test,
+                model_path, prev_model_1_path, prev_model_2_path,
+                code_size_1, code_size_2,
+
+                # Hyperparameters
+                learning_rate=learning_rate_val,
+                dropout_1=dropout_1_val,
+                dropout_2=dropout_2_val,
+                initial_momentum=initial_momentum_val,
+                final_momentum=final_momentum_val,
+                saturate_momentum=saturate_momentum_val,
+                training_iters=training_iters_val,
+                batch_size=batch_size_val,
+            )
+
+        return
+
+    hyperparameters = '+'.join([
+        '-'.join(('lr', str(learning_rate))),
+        '-'.join(('dr1', str(dropout_1))),
+        '-'.join(('dr2', str(dropout_2))),
+        '-'.join(('mmm_init', str(initial_momentum))),
+        '-'.join(('mmm_end', str(final_momentum))),
+        '-'.join(('mmm_sat', str(saturate_momentum))),
+        '-'.join(('iter', str(training_iters))),
+        '-'.join(('batch', str(batch_size))),
+    ])
+
     start_saving_at = 20
-    batch_size = 10
     n_classes = 2
+    
+    model_path = format_config(model_path, {
+        "hyperparameters": hyperparameters,
+    })
 
     if os.path.isfile(model_path) or \
        os.path.isfile(model_path + ".meta"):
@@ -315,8 +401,8 @@ def run_finetuning(experiment,
     ])
 
     # Place GD + momentum optimizer
-    model["momentum"] = tf.placeholder("float32")
-    optimizer = tf.train.MomentumOptimizer(learning_rate, model["momentum"]).minimize(model["cost"])
+    model["momentum"] = tf.compat.v1.placeholder("float32")
+    optimizer = tf.compat.v1.train.MomentumOptimizer(learning_rate, model["momentum"]).minimize(model["cost"])
 
     # Compute accuracies
     correct_prediction = tf.equal(
@@ -325,23 +411,26 @@ def run_finetuning(experiment,
     )
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
+    monitoring = []
+
     # Initialize Tensorflow session
-    init = tf.global_variables_initializer()
-    with tf.Session() as sess:
+    init = tf.compat.v1.global_variables_initializer()
+    with tf.compat.v1.Session() as sess:
         sess.run(init)
 
         # Define model saver
-        saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
+        saver = tf.compat.v1.train.Saver(model["params"], write_version=tf.compat.v1.train.SaverDef.V2)
 
         # Initialize with an absurd cost and accuracy for model selection
         prev_costs = np.array([9999999999] * 3)
         prev_accs = np.array([0.0] * 3)
+        prev_epoch = 0
 
         # Iterate Epochs
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(X_train) / batch_size)
+            batches = range(int(len(X_train) / batch_size))
             costs = np.zeros((len(batches), 3))
             accs = np.zeros((len(batches), 3))
 
@@ -408,7 +497,7 @@ def run_finetuning(experiment,
             acc_train, acc_valid, acc_test = accs
 
             # Pretty print training info
-            print format_config(
+            print(format_config(
                 "Exp={experiment}, Model=mlp, Iter={epoch:5d}, Acc={acc_train:.6f} {acc_valid:.6f} {acc_test:.6f}, Momentum={momentum:.6f}",
                 {
                     "experiment": experiment,
@@ -418,21 +507,38 @@ def run_finetuning(experiment,
                     "acc_test": acc_test,
                     "momentum": momentum,
                 }
-            ),
+            ), end=' ')
 
             # Save better model if optimization achieves a lower accuracy
             # and avoid initial epochs because of the fluctuations
             if acc_valid > prev_accs[1] and epoch > start_saving_at:
-                print "Saving better model"
+                print("Saving better model")
                 saver.save(sess, model_path)
                 prev_accs = accs
                 prev_costs = costs
+                prev_epoch = epoch
             else:
-                print
+                print()
+
+            monitoring += [{
+                "experiment": experiment,
+                "hyperparameters": hyperparameters,
+                "epoch": epoch,
+                "acc_train": acc_train,
+                "acc_valid": acc_valid,
+                "acc_test": acc_test,
+                "cost_train": cost_train,
+                "cost_valid": cost_valid,
+                "cost_test": cost_test,
+                "momentum": momentum,
+            }]
+
+    pd.DataFrame(monitoring).to_csv(model_path + ".csv", index=False)
 
 
 def run_nn(hdf5, experiment, code_size_1, code_size_2):
 
+    print(experiment)
     exp_storage = hdf5["experiments"][experiment]
 
     for fold in exp_storage:
@@ -452,7 +558,7 @@ def run_nn(hdf5, experiment, code_size_1, code_size_2):
         ae2_model_path = format_config("./data/models/{experiment}_autoencoder-2.ckpt", {
             "experiment": experiment_cv,
         })
-        nn_model_path = format_config("./data/models/{experiment}_mlp.ckpt", {
+        nn_model_path = format_config("./data/models/{experiment}_{hyperparameters}_mlp.ckpt", {
             "experiment": experiment_cv,
         })
 
@@ -460,7 +566,8 @@ def run_nn(hdf5, experiment, code_size_1, code_size_2):
 
         # Run first autoencoder
         run_autoencoder1(experiment_cv,
-                         X_train, y_train, X_valid, y_valid, X_test, y_test,
+                         X_train, y_train, X_valid,
+                         y_valid, X_test, y_test,
                          model_path=ae1_model_path,
                          code_size=code_size_1)
 
@@ -468,7 +575,8 @@ def run_nn(hdf5, experiment, code_size_1, code_size_2):
 
         # Run second autoencoder
         run_autoencoder2(experiment_cv,
-                         X_train, y_train, X_valid, y_valid, X_test, y_test,
+                         X_train, y_train, X_valid,
+                         y_valid, X_test, y_test,
                          model_path=ae2_model_path,
                          prev_model_path=ae1_model_path,
                          prev_code_size=code_size_1,
@@ -477,17 +585,28 @@ def run_nn(hdf5, experiment, code_size_1, code_size_2):
         reset()
 
         # Run multilayer NN with pre-trained autoencoders
-        run_finetuning(experiment_cv,
-                       X_train, y_train, X_valid, y_valid, X_test, y_test,
-                       model_path=nn_model_path,
-                       prev_model_1_path=ae1_model_path,
-                       prev_model_2_path=ae2_model_path,
-                       code_size_1=code_size_1,
-                       code_size_2=code_size_2)
+        run_finetuning(
+            experiment_cv,
+            X_train, y_train, X_valid,
+            y_valid, X_test, y_test,
+            model_path=nn_model_path,
+            prev_model_1_path=ae1_model_path,
+            prev_model_2_path=ae2_model_path,
+            code_size_1=code_size_1,
+            code_size_2=code_size_2,
+            
+            # Hyperparameters
+            learning_rate=[0.05, 0.005, 0.0005],
+            dropout_1=[0.2, 0.6],
+            dropout_2=[0.4, 0.8],
+            initial_momentum=0.1,
+            final_momentum=0.9,
+            saturate_momentum=100,
+            training_iters=1000,
+            batch_size=[10, 20],
+        )
 
 if __name__ == "__main__":
-
-    reset()
 
     arguments = docopt(__doc__)
 
@@ -508,7 +627,7 @@ if __name__ == "__main__":
         config = {"derivative": derivative}
 
         if arguments["--whole"]:
-            experiments += [format_config("{derivative}_whole", config)],
+            experiments += [format_config("{derivative}_whole", config)]
 
         if arguments["--male"]:
             experiments += [format_config("{derivative}_male", config)]

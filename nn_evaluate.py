@@ -127,7 +127,7 @@ if __name__ == "__main__":
         config = {"derivative": derivative}
 
         if arguments["--whole"]:
-            experiments += [format_config("{derivative}_whole", config)],
+            experiments += [format_config("{derivative}_whole", config)]
 
         if arguments["--male"]:
             experiments += [format_config("{derivative}_male", config)]
@@ -159,6 +159,6 @@ if __name__ == "__main__":
             "Sensivity", "Specificity"]
     df = pd.DataFrame(results, columns=cols)
 
-    print df[cols] \
+    print(df[cols] \
         .sort_values(["Exp"]) \
-        .reset_index()
+        .reset_index())

@@ -80,9 +80,9 @@ def prepare_folds(hdf5, folds, pheno, derivatives, experiment):
         for i, (train_index, test_index) in enumerate(skf.split(ids, pheno["STRAT"])):
             train_index, valid_index = train_test_split(train_index, test_size=0.33)
             fold = exp.require_group(str(i))
-            fold["train"] = ids[train_index].tolist()
-            fold["valid"] = ids[valid_index].tolist()
-            fold["test"] = ids[test_index].tolist()
+            fold["train"] = ids[train_index].astype('S')
+            fold["valid"] = ids[valid_index].astype('S')
+            fold["test"] = ids[test_index].astype('S')
 
 
 def load_patients_to_file(hdf5, pheno, derivatives):
@@ -134,25 +134,25 @@ if __name__ == "__main__":
         load_patients_to_file(hdf5, pheno, derivatives)
 
     if arguments["--whole"]:
-        print
-        print "Preparing whole dataset"
+        print()
+        print("Preparing whole dataset")
         prepare_folds(hdf5, folds, pheno, derivatives, experiment="{derivative}_whole")
 
     if arguments["--male"]:
-        print
-        print "Preparing male dataset"
+        print()
+        print("Preparing male dataset")
         pheno_male = pheno[pheno["SEX"] == "M"]
         prepare_folds(hdf5, folds, pheno_male, derivatives, experiment="{derivative}_male")
 
     if arguments["--threshold"]:
-        print
-        print "Preparing thresholded dataset"
+        print()
+        print("Preparing thresholded dataset")
         pheno_thresh = pheno[pheno["MEAN_FD"] <= 0.2]
         prepare_folds(hdf5, folds, pheno_thresh, derivatives, experiment="{derivative}_threshold")
 
     if arguments["--leave-site-out"]:
-        print
-        print "Preparing leave-site-out dataset"
+        print()
+        print("Preparing leave-site-out dataset")
         for site in pheno["SITE_ID"].unique():
             pheno_without_site = pheno[pheno["SITE_ID"] != site]
             prepare_folds(hdf5, folds, pheno_without_site, derivatives, experiment=format_config(
