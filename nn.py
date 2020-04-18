@@ -22,6 +22,9 @@ Options:
 import os
 import numpy as np
 import tensorflow as tf
+# import tensorflow.compat.v1 as tf
+
+
 from docopt import docopt
 from utils import (load_phenotypes, format_config, hdf5_handler, load_fold,
                    sparsity_penalty, reset, to_softmax, load_ae_encoder)
@@ -55,6 +58,8 @@ def run_autoencoder1(experiment,
     if os.path.isfile(model_path) or \
        os.path.isfile(model_path + ".meta"):
         return
+    
+    # tf.disable_v2_behavior()
 
     # Create model and add sparsity penalty (if requested)
     model = ae(X_train.shape[1], code_size, corruption=corruption, enc=ae_enc, dec=ae_dec)
@@ -78,7 +83,7 @@ def run_autoencoder1(experiment,
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(X_train) / batch_size)
+            batches = range(int(len(X_train) / batch_size))
             costs = np.zeros((len(batches), 3))
 
             for ib in batches:
@@ -121,20 +126,21 @@ def run_autoencoder1(experiment,
             cost_train, cost_valid, cost_test = costs
 
             # Pretty print training info
-            print format_config(
-                "Exp={experiment}, Model=ae1, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
+
+            print (
+                "Exp={experiment}, Model= ae1, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
                 {
                     "experiment": experiment,
                     "epoch": epoch,
                     "cost_train": cost_train,
                     "cost_valid": cost_valid,
                     "cost_test": cost_test,
-                }
-            ),
+                } 
+                )
 
             # Save better model if optimization achieves a lower cost
             if cost_valid < prev_costs[1]:
-                print "Saving better model"
+                print ("Saving better model")
                 saver.save(sess, model_path)
                 prev_costs = costs
             else:
@@ -156,6 +162,8 @@ def run_autoencoder2(experiment,
     if os.path.isfile(model_path) or \
        os.path.isfile(model_path + ".meta"):
         return
+
+    # tf.disable_v2_behavior()
 
     # Convert training, validation and test set to the new representation
     prev_model = ae(X_train.shape[1], prev_code_size,
@@ -206,7 +214,7 @@ def run_autoencoder2(experiment,
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(X_train) / batch_size)
+            batches = range(int(len(X_train) / batch_size))
             costs = np.zeros((len(batches), 3))
 
             for ib in batches:
@@ -249,7 +257,7 @@ def run_autoencoder2(experiment,
             cost_train, cost_valid, cost_test = costs
 
             # Pretty print training info
-            print format_config(
+            print (
                 "Exp={experiment}, Model=ae2, Iter={epoch:5d}, Cost={cost_train:.6f} {cost_valid:.6f} {cost_test:.6f}",
                 {
                     "experiment": experiment,
@@ -258,11 +266,11 @@ def run_autoencoder2(experiment,
                     "cost_valid": cost_valid,
                     "cost_test": cost_test,
                 }
-            ),
+            )
 
             # Save better model if optimization achieves a lower cost
             if cost_valid < prev_costs[1]:
-                print "Saving better model"
+                print ("Saving better model")
                 saver.save(sess, model_path)
                 prev_costs = costs
             else:
@@ -341,7 +349,7 @@ def run_finetuning(experiment,
         for epoch in range(training_iters):
 
             # Break training set into batches
-            batches = range(len(X_train) / batch_size)
+            batches = range(int(len(X_train) / batch_size))
             costs = np.zeros((len(batches), 3))
             accs = np.zeros((len(batches), 3))
 
@@ -408,7 +416,7 @@ def run_finetuning(experiment,
             acc_train, acc_valid, acc_test = accs
 
             # Pretty print training info
-            print format_config(
+            print (
                 "Exp={experiment}, Model=mlp, Iter={epoch:5d}, Acc={acc_train:.6f} {acc_valid:.6f} {acc_test:.6f}, Momentum={momentum:.6f}",
                 {
                     "experiment": experiment,
@@ -418,12 +426,12 @@ def run_finetuning(experiment,
                     "acc_test": acc_test,
                     "momentum": momentum,
                 }
-            ),
+            )
 
             # Save better model if optimization achieves a lower accuracy
             # and avoid initial epochs because of the fluctuations
             if acc_valid > prev_accs[1] and epoch > start_saving_at:
-                print "Saving better model"
+                print ("Saving better model")
                 saver.save(sess, model_path)
                 prev_accs = accs
                 prev_costs = costs
@@ -432,6 +440,7 @@ def run_finetuning(experiment,
 
 
 def run_nn(hdf5, experiment, code_size_1, code_size_2):
+    # tf.disable_v2_behavior()
 
     exp_storage = hdf5["experiments"][experiment]
 
@@ -494,7 +503,8 @@ if __name__ == "__main__":
     pheno_path = "./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv"
     pheno = load_phenotypes(pheno_path)
 
-    hdf5 = hdf5_handler("./data/abide.hdf5", "a")
+    # hdf5 = hdf5_handler("./data/abide.hdf5", "a")
+    hdf5 = hdf5_handler(bytes("./data/abide.hdf5",encoding="utf8"), 'a')
 
     valid_derivatives = ["cc200", "aal", "ez", "ho", "tt", "dosenbach160"]
     derivatives = [derivative for derivative
@@ -532,4 +542,5 @@ if __name__ == "__main__":
 
     experiments = sorted(experiments)
     for experiment in experiments:
-        run_nn(hdf5, experiment, code_size_1, code_size_2)
+        # print(experiment)
+        run_nn(hdf5, experiment[0], code_size_1, code_size_2)
