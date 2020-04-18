@@ -20,6 +20,7 @@ Options:
 
 """
 
+
 import os
 import random
 import pandas as pd
@@ -48,7 +49,7 @@ def load_patient(subj, tmpl):
 
     ROIs = ["#" + str(y) for y in sorted([int(x[1:]) for x in df.keys().tolist()])]
 
-    functional = np.nan_to_num(df[ROIs].as_matrix().T).tolist()
+    functional = np.nan_to_num(df[ROIs].to_numpy().T).tolist()
     functional = preprocessing.scale(functional, axis=1)
     functional = compute_connectivity(functional)
     functional = functional.astype(np.float32)
@@ -56,7 +57,7 @@ def load_patient(subj, tmpl):
     return subj, functional.tolist()
 
 
-def load_patients(subjs, tmpl, jobs=10):
+def load_patients(subjs, tmpl, jobs=1):
     partial_load_patient = partial(load_patient, tmpl=tmpl)
     msg = "Processing {current} of {total}"
     return dict(run_progress(partial_load_patient, subjs, message=msg, jobs=jobs))
@@ -80,9 +81,16 @@ def prepare_folds(hdf5, folds, pheno, derivatives, experiment):
         for i, (train_index, test_index) in enumerate(skf.split(ids, pheno["STRAT"])):
             train_index, valid_index = train_test_split(train_index, test_size=0.33)
             fold = exp.require_group(str(i))
-            fold["train"] = ids[train_index].tolist()
-            fold["valid"] = ids[valid_index].tolist()
-            fold["test"] = ids[test_index].tolist()
+
+            fold['train'] = [ind.encode('utf8') for ind in ids[train_index]] 
+
+            fold['valid'] = [indv.encode('utf8') for indv in ids[valid_index]]
+ 
+            fold["test"] = [indt.encode('utf8') for indt in ids[test_index]]
+
+            # fold["train"] = ids[train_index].tolist()
+            # fold["valid"] = ids[valid_index].tolist()
+            # fold["test"] = ids[test_index].tolist()
 
 
 def load_patients_to_file(hdf5, pheno, derivatives):
@@ -96,16 +104,21 @@ def load_patients_to_file(hdf5, pheno, derivatives):
         "ho": "cpac/filt_global/rois_ho/{subject}_rois_ho.1D",
         "tt": "cpac/filt_global/rois_tt/{subject}_rois_tt.1D",
     }
-
+    #print('storing_patients')
     storage = hdf5.require_group("patients")
     file_ids = pheno["FILE_ID"].tolist()
+    #print('storing_finished')
 
     for derivative in derivatives:
 
+        #print('derivative_loop')
         file_template = os.path.join(download_root, derivatives_path[derivative])
+        # print('one_over')
         func_data = load_patients(file_ids, tmpl=file_template)
+        #print('two_over')
 
         for pid in func_data:
+            print('func_data_filling')
             record = pheno[pheno["FILE_ID"] == pid].iloc[0]
             patient_storage = storage.require_group(pid)
             patient_storage.attrs["id"] = record["FILE_ID"]
@@ -125,7 +138,11 @@ if __name__ == "__main__":
     pheno_path = "./data/phenotypes/Phenotypic_V1_0b_preprocessed1.csv"
     pheno = load_phenotypes(pheno_path)
 
-    hdf5 = hdf5_handler("./data/abide.hdf5", "a")
+<<<<<<< HEAD
+    hdf5 = hdf5_handler(bytes("./data/abide.hdf5",encoding="utf8"), 'a')
+=======
+    hdf5 = hdf5_handler(bytes("./data/abide.hdf5",encoding="utf-8"), 'a')
+>>>>>>> 0323a23ab53b9dc7f36b7b9ca066e3bc78a90f36
 
     valid_derivatives = ["cc200", "aal", "ez", "ho", "tt", "dosenbach160"]
     derivatives = [derivative for derivative in arguments["<derivative>"] if derivative in valid_derivatives]
@@ -134,25 +151,26 @@ if __name__ == "__main__":
         load_patients_to_file(hdf5, pheno, derivatives)
 
     if arguments["--whole"]:
-        print
-        print "Preparing whole dataset"
+        
+        print ("Preparing whole dataset")
         prepare_folds(hdf5, folds, pheno, derivatives, experiment="{derivative}_whole")
 
     if arguments["--male"]:
-        print
-        print "Preparing male dataset"
+        
+        print ("Preparing male dataset")
         pheno_male = pheno[pheno["SEX"] == "M"]
         prepare_folds(hdf5, folds, pheno_male, derivatives, experiment="{derivative}_male")
 
     if arguments["--threshold"]:
-        print
-        print "Preparing thresholded dataset"
+        
+        print ("Preparing thresholded dataset")
         pheno_thresh = pheno[pheno["MEAN_FD"] <= 0.2]
         prepare_folds(hdf5, folds, pheno_thresh, derivatives, experiment="{derivative}_threshold")
 
     if arguments["--leave-site-out"]:
-        print
-        print "Preparing leave-site-out dataset"
+        
+        # print('Hi')
+        print ("Preparing leave-site-out dataset")
         for site in pheno["SITE_ID"].unique():
             pheno_without_site = pheno[pheno["SITE_ID"] != site]
             prepare_folds(hdf5, folds, pheno_without_site, derivatives, experiment=format_config(

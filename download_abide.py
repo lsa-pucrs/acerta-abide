@@ -6,6 +6,7 @@ import urllib
 import urllib.request
 
 
+
 def collect_and_download(derivative, pipeline, strategy, out_dir):
 
     s3_prefix = "https://s3.amazonaws.com/fcp-indi/data/Projects/ABIDE_Initiative"

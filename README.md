@@ -2,9 +2,8 @@
 Deep learning using the [ABIDE data](http://fcon_1000.projects.nitrc.org/indi/abide/)
 
 ## Environment Setup
-In order to run the deep learning model, you may want to install [docker](https://docs.docker.com/engine/getstarted/step_one/) and [nvidia-docker](https://github.com/NVIDIA/nvidia-docker) to an easy setup.
 
-If you want to install it directly in your machine, you need to install [CUDA 8.0](https://developer.nvidia.com/cuda-downloads) and the packages from `requirements.txt`:
+Download the packages from `requirements.txt`:
 ```bash
 pip install -r requirements.txt
 ```
@@ -36,9 +35,6 @@ export CUDA_VISIBLE_DEVICES=1
 ```
 will only let Tensorflow see the second GPU available in your bus.
 
-## Running with Docker
-First, you need to build the project image: ```docker build -t acerta-abide .```
-Second, you need to start a container with this image, in order to execute the next steps: ```nvidia-docker run -it --rm -v $(realpath .):/opt/acerta-abide acerta-abide /bin/bash```
 
 ## Data preparation
 

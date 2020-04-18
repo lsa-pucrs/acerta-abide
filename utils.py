@@ -12,6 +12,8 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from model import ae
+# from tensorflow.python.framework import ops
+
 
 identifier = '(([a-zA-Z]_)?([a-zA-Z0-9_]*))'
 replacement_field = '{' + identifier + '}'
@@ -19,9 +21,12 @@ replacement_field = '{' + identifier + '}'
 
 def reset():
     tf.reset_default_graph()
+    #ops.reset_default_graph()
+    # tf.compat.v1.reset_default_graph()
     random.seed(19)
     np.random.seed(19)
     tf.set_random_seed(19)
+    #tf.random.set_seed(19)
 
 
 def load_phenotypes(pheno_path):
@@ -48,8 +53,9 @@ def hdf5_handler(filename, mode="r"):
     settings[2] = 0
     propfaid.set_cache(*settings)
     with contextlib.closing(h5py.h5f.open(filename, fapl=propfaid)) as fid:
-        return h5py.File(fid, mode)
-
+        f = h5py.File(fid, mode)
+        # f.attrs.create(dtype=h5py.special_dtype(vlen=str)) 
+        return f
 
 def load_fold(patients, experiment, fold):
 
@@ -113,7 +119,7 @@ def run_progress(callable_func, items, message=None, jobs=1):
 
     results = []
 
-    print 'Starting pool of %d jobs' % jobs
+    print ('Starting pool of %d jobs' % jobs)
 
     current = 0
     total = len(items)
@@ -145,7 +151,6 @@ def run_progress(callable_func, items, message=None, jobs=1):
         pool.close()
         pool.join()
 
-    print
     return results
 
 
@@ -165,9 +170,9 @@ def load_ae_encoder(input_size, code_size, model_path):
     try:
         with tf.Session() as sess:
             sess.run(init)
-            saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
+            saver = tf.train.Saver(model["params"], write_version= tf.train.SaverDef.V2)
             if os.path.isfile(model_path):
-                print "Restoring", model_path
+                print ("Restoring", model_path)
                 saver.restore(sess, model_path)
             params = sess.run(model["params"])
             return {"W_enc": params["W_enc"], "b_enc": params["b_enc"]}
