@@ -338,6 +338,7 @@ def run_finetuning(experiment,
     with tf.Session() as sess:
         sess.run(init)
 
+
         # Define model saver
         saver = tf.train.Saver(model["params"], write_version=tf.train.SaverDef.V2)
 
