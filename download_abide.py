@@ -1,9 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+
+Data download
+
+Usage:
+  download_abide.py [--pipeline=cpac] [--strategy=filt_global] [<derivative> ...]
+  download_abide.py (-h | --help)
+
+Options:
+  -h --help              Show this screen
+  --pipeline=cpac        Pipeline [default: cpac]
+  --strategy=filt_global Strategy [default: filt_global]
+  derivative             Derivatives to download
+
+"""
+
+
 import os
 import urllib
 import urllib.request
+from docopt import docopt
 
 
 
@@ -56,11 +74,15 @@ def collect_and_download(derivative, pipeline, strategy, out_dir):
 
 if __name__ == "__main__":
 
-    derivatives = ["rois_aal", "rois_cc200", "rois_dosenbach160", "rois_ez", "rois_ho", "rois_tt"]
-    pipeline = "cpac"
-    strategy = "filt_global"
+    arguments = docopt(__doc__)
+
+    if not arguments['<derivative>']:
+        arguments['<derivative>'] = ['rois_aal', 'rois_cc200', 'rois_dosenbach160', 'rois_ez', 'rois_ho', 'rois_tt']
+
+    pipeline = arguments.get('pipeline', 'cpac')
+    strategy = arguments.get('strategy', 'filt_global')
 
     out_dir = os.path.abspath("data/functionals/cpac/filt_global/")
 
-    for derivative in derivatives:
+    for derivative in arguments['<derivative>']:
         collect_and_download(derivative, pipeline, strategy, os.path.join(out_dir, derivative))
