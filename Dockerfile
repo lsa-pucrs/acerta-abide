@@ -1,4 +1,4 @@
-FROM gcr.io/tensorflow/tensorflow:latest-gpu
+FROM tensorflow/tensorflow
 
 WORKDIR /opt/acerta-abide
 COPY requirements.txt /opt/acerta-abide
