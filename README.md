@@ -3,7 +3,7 @@ Deep learning using the [ABIDE data](http://fcon_1000.projects.nitrc.org/indi/ab
 
 ## Environment Setup
 
-Please be aware that this code is meant to be run with Python 3.
+Please be aware that this code is meant to be run with Python 3 under Linux (MacOS may work, Windows probably not).
 Download the packages from `requirements.txt`:
 ```bash
 pip install -r requirements.txt
